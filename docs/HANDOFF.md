@@ -154,6 +154,13 @@ Atomic Explorer and renders hydrogen 1s.
 
 ## 6. What the primary agent is doing next (do not duplicate)
 
+Update: Phase 2 (Molecular Builder) is done. `render/VolumeRenderer.ts` now exposes a `solids`
+group (opaque geometry composited with volumes via a depth pre-pass), `pick()`,
+`pointOnViewPlane()` and `frameView()`. Workstream B can reuse these for crystal rendering by
+adding its own layer to `renderer.solids` (see `render/StructureLayer.ts`) instead of writing a
+new renderer.
+
+
 Workstream A, branch `claude/...`:
 1. Molecular Builder (Phase 2): place/remove atoms, bonds and bond orders (RDKit), measurement,
    HF/DFT single points and geometry optimisation (PySCF gradients + ASE optimiser), molecular

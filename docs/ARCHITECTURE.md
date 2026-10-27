@@ -10,6 +10,10 @@ backend/chemmodel/
     elements.py          dataset access, configurations, valence, Slater rules
   quantum/
     scf.py               PySCF HF/DFT, grids, densities, orbitals, ESP (atoms + molecules)
+  molecular/
+    structure.py         Molecule model, RDKit perception, SMILES -> 3D, measurements
+    optimize.py          MMFF/UFF, PySCF+ASE BFGS optimisation, bond scans
+    tasks.py             job kinds geomopt and scan
   jobs/
     manager.py           one process per job, cancel = terminate, disk cache by params hash
     tasks.py             job kinds (TASKS dict) + checkpoint post-processing
@@ -17,15 +21,18 @@ backend/chemmodel/
     main.py              FastAPI app, routers, /api/health, serves frontend/dist
     atomic.py            /api/elements, /api/hydrogenic/*, /api/atoms/*
     calc.py              /api/jobs/*, /api/calc/options
+    molecular.py         /api/molecule/* (examples, smiles, analyze, hydrogens, force field, jobs)
 backend/scripts/build_element_data.py
 backend/tests/           pytest scientific validation
 
 frontend/src/
   api/client.ts          typed API wrappers, array decoding
-  render/VolumeRenderer.ts  Three.js ray-marching volume/isosurface renderer (scene unit = pm)
+  render/VolumeRenderer.ts  Three.js ray-marching volume/isosurface renderer (scene unit = pm);
+                         opaque `solids` group drawn in a depth pre-pass so rays stop at atoms
+  render/StructureLayer.ts  instanced ball-and-stick atoms and bonds
   science/               units + scale bar, enclosed-probability threshold, CUBE writer
   state/atomic.ts        Atomic Explorer state, undo/redo, autosave
-  components/            AtomicExplorer (workspace), PeriodicTable, ElementPanel,
+  components/            AtomicExplorer, MolecularBuilder (workspaces), PeriodicTable, ElementPanel,
                          SliceView (cross-sections + measurement), LineChart, EnergyDiagram,
                          Splitter (resizable panels), useLog (console)
   App.tsx                top toolbar and workspace switching

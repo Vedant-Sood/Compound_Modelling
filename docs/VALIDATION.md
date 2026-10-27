@@ -1,6 +1,6 @@
 # Validation
 
-`cd backend && python -m pytest` runs 117 tests. Reference points:
+`cd backend && python -m pytest` runs 126 tests. Reference points:
 
 | Test | Reference |
 |---|---|
@@ -25,6 +25,12 @@
 | Xe def2-SVP uses ECP and warns | — |
 | Pb-208 RMS radius from estimate within 3 % of 5.50 fm | Angeli & Marinova (2013) |
 | SCF job end-to-end (He RHF/cc-pVDZ −2.8552 Eh), caching, orbital + ESP from checkpoint | literature |
+| H₂O HF/6-31G* optimised r(OH) 0.947 Å, ∠HOH 105.5° | NIST CCCBDB |
+| H₂ HF/cc-pVDZ optimisation through the job API: r = 0.746 Å | NIST CCCBDB |
+| H₂ bond scan has an interior minimum near 0.75 Å | — |
+| MMFF94 relaxes distorted CH₄ to 109.47° | tetrahedral geometry |
+| Bond perception from bare XYZ (ethylene C=C) | RDKit DetermineBonds |
+| Radical and ion electron accounting, impossible multiplicities rejected | — |
 
 Frontend (`npm test`): unit choice and scale bar, representation levels, enclosed threshold,
-CUBE layout, undo/redo and quantum-number constraints, measurement geometry.
+CUBE layout, undo/redo and quantum-number constraints, measurement geometry, XYZ export.

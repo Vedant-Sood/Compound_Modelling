@@ -23,7 +23,8 @@ import { LineChart, download } from "./LineChart";
 import { PeriodicTable } from "./PeriodicTable";
 import { SliceView } from "./SliceView";
 import { Splitter } from "./Splitter";
-import { useLog, type LogEntry } from "./useLog";
+import { useLog } from "./useLog";
+import { Console, dataURLtoBlob } from "./common";
 
 const L_LETTERS = "spdfghik";
 const AXES = ["x", "y", "z"] as const;
@@ -219,7 +220,9 @@ export function AtomicExplorer({ elements }: { elements: ElementSummary[] }) {
     };
     try {
       const j = await api.submitSCF(body);
-      setJob(j);
+      // cached results come back already done but without the payload
+      setJob(j.state === "done" ? await api.job(j.id) : j);
+      if (j.cached) log("Loaded cached result (identical settings were run before).");
       log(`Submitted ${s.scfMethod}${s.scfMethod === "DFT" ? `/${s.scfXc}` : ""}/${s.scfBasis} for ${detail.summary.symbol}${s.charge ? ` (charge ${s.charge})` : ""}, 2S = ${body.spin} (job ${j.id})`);
     } catch (e) {
       log(`Submit failed: ${(e as Error).message}`, "error");
@@ -937,30 +940,4 @@ function CompareTable({ a, b }: { a: ElementDetail; b: ElementDetail }) {
       </tbody>
     </table>
   );
-}
-
-function Console({ entries, onClear }: { entries: LogEntry[]; onClear: () => void }) {
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    ref.current?.scrollTo(0, ref.current.scrollHeight);
-  }, [entries]);
-  return (
-    <div className="console" ref={ref}>
-      <button className="small clear" onClick={onClear}>Clear</button>
-      {entries.map((e, i) => (
-        <div key={i} className={`log ${e.level}`}>
-          <span className="muted">{e.time}</span> {e.message}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function dataURLtoBlob(url: string): Blob {
-  const [head, data] = url.split(",");
-  const mime = head.match(/:(.*?);/)?.[1] ?? "image/png";
-  const bin = atob(data);
-  const arr = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-  return new Blob([arr], { type: mime });
 }

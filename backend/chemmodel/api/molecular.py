@@ -56,10 +56,13 @@ class ScanIn(QuantumIn):
     points: int = 15
 
 
-def _mol(m: MoleculeIn) -> S.Molecule:
+def _mol(m: MoleculeIn, check_spin: bool = True) -> S.Molecule:
+    """Structural operations (analysis, hydrogens, force field) accept any
+    multiplicity while a structure is being drawn; quantum jobs check it."""
     try:
         mol = S.Molecule.from_json(m.model_dump())
-        mol.check_spin()
+        if check_spin:
+            mol.check_spin()
         return mol
     except (ValueError, KeyError) as exc:
         raise HTTPException(422, str(exc)) from exc
@@ -68,6 +71,45 @@ def _mol(m: MoleculeIn) -> S.Molecule:
 @router.get("/examples")
 def examples():
     return {"examples": S.EXAMPLES}
+
+
+@router.get("/display-data")
+def display_data():
+    """Covalent radii (Cordero et al. 2008, via ASE) and Jmol colours for drawing atoms."""
+    from ase.data import chemical_symbols, covalent_radii
+    from ase.data.colors import jmol_colors
+
+    return {
+        "covalent_radius_angstrom": {s: float(covalent_radii[z]) for z, s in enumerate(chemical_symbols) if z},
+        "colour": {
+            s: "#%02x%02x%02x" % tuple(int(round(255 * c)) for c in jmol_colors[z])
+            for z, s in enumerate(chemical_symbols)
+            if z and z < len(jmol_colors)
+        },
+        "source": "ase.data (covalent radii: Cordero et al., Dalton Trans. 2008; colours: Jmol convention)",
+    }
+
+
+@router.post("/add-hydrogens")
+def add_hydrogens(m: MoleculeIn):
+    """Saturate open valences with hydrogens placed by RDKit (coordinates estimated)."""
+    from rdkit import Chem
+
+    mol = _mol(m, check_spin=False)
+    if not mol.bonds and len(mol.symbols) > 1:
+        mol.bonds = S.bonds_from_rdkit(S.to_rdkit(mol, perceive_bonds=True))
+    rd = S.to_rdkit(mol)
+    for a in rd.GetAtoms():
+        a.SetNoImplicit(False)
+        a.SetNumRadicalElectrons(0)
+    try:
+        Chem.SanitizeMol(rd)
+    except Exception as exc:
+        raise HTTPException(422, f"cannot add hydrogens: {exc}") from exc
+    rd = Chem.AddHs(rd, addCoords=True)
+    out = S.from_rdkit(rd, charge=mol.charge, multiplicity=1)
+    out.multiplicity = 1 if out.n_electrons % 2 == 0 else 2
+    return {"molecule": out.to_json(), "added": len(out.symbols) - len(mol.symbols)}
 
 
 @router.post("/from-smiles")
@@ -81,7 +123,7 @@ def from_smiles(body: dict):
 
 @router.post("/analyze")
 def analyze(m: MoleculeIn, perceive_bonds: bool = False):
-    mol = _mol(m)
+    mol = _mol(m, check_spin=False)
     if perceive_bonds or not mol.bonds:
         try:
             rd = S.to_rdkit(S.Molecule(mol.symbols, mol.coords, [], mol.charge, mol.multiplicity), perceive_bonds=True)
@@ -106,7 +148,7 @@ def _com(mol: S.Molecule) -> list[float]:
 
 @router.post("/forcefield-optimize")
 def forcefield_optimize(m: MoleculeIn):
-    mol = _mol(m)
+    mol = _mol(m, check_spin=False)
     if not mol.bonds:
         mol.bonds = S.bonds_from_rdkit(S.to_rdkit(mol, perceive_bonds=True))
     try:
