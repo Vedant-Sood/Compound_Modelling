@@ -10,3 +10,4 @@ spglib==2.8.0
 rdkit==2026.9.1
 pytest
 httpx
+tblite==0.7.0  # optional: balanced (GFN-xTB) mode

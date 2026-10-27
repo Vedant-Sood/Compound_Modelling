@@ -37,7 +37,7 @@ def calc_options():
         "xc_functionals": XC_FUNCTIONALS,
         "modes": {
             "accurate": "Ab initio HF or DFT with PySCF (available)",
-            "balanced": "Semiempirical (GFN-xTB) - optional integration, not installed",
+            "balanced": "Semiempirical GFN2-/GFN1-xTB via tblite (optional; molecular workspace)",
             "fast": "Reference data / force fields - planned",
         },
     }

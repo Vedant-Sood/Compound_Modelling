@@ -13,7 +13,9 @@
   the UI flags Z > 103.
 - Atomic "energy levels" for many-electron atoms are canonical orbital energies (Koopmans), not
   spectroscopic term energies.
-- Semiempirical (xTB) "balanced mode" is not integrated yet.
+- Balanced mode (GFN-xTB) needs the optional `tblite` package (`pip install tblite`); the
+  endpoint returns 501 without it. xTB energies are method-specific and the UI never compares
+  them with HF/DFT energies; elements above Rn are rejected.
 - Bond scans are rigid (only one atom moves) and use the chosen reference; restricted HF/DFT
   does not dissociate homolytic bonds correctly.
 - MMFF/UFF energies are force-field steric energies and are never compared with quantum energies.

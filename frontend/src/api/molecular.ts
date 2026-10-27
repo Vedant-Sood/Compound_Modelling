@@ -43,6 +43,22 @@ export interface GeomOptResult extends SCFResult {
   molecule: MoleculeJSON;
 }
 
+export interface XTBResult {
+  engine: string;
+  engine_version: string;
+  solver: string; // GFN2-xTB | GFN1-xTB
+  energy_Eh: number;
+  orbitals: { index: number; energy_eV: number; occupation: number }[];
+  homo_lumo_gap_eV: number | null;
+  dipole_debye: number[];
+  atomic_charges: number[];
+  charge_model: string;
+  wall_time_s: number;
+  warnings: string[];
+  molecule: MoleculeJSON;
+  optimisation?: { optimiser: string; fmax_eV_per_A: number; converged: boolean; steps: OptStep[] };
+}
+
 export interface ScanResult {
   points: { r_angstrom: number; energy_Eh: number; converged: boolean }[];
   bond: [number, number];
@@ -79,4 +95,5 @@ export const molApi = {
   scf: (body: Record<string, unknown>) => post<Job>("/api/molecule/jobs/scf", body),
   geomopt: (body: Record<string, unknown>) => post<Job<GeomOptResult>>("/api/molecule/jobs/geomopt", body),
   scan: (body: Record<string, unknown>) => post<Job<ScanResult>>("/api/molecule/jobs/scan", body),
+  xtb: (body: Record<string, unknown>) => post<Job<XTBResult>>("/api/molecule/jobs/xtb", body),
 };

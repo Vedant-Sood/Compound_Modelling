@@ -28,6 +28,14 @@ spin contamination > 0.05 is flagged.
 Densities, orbitals and ESP are evaluated with `pyscf.dft.numint` and `int1e_grids` on a cubic
 grid. For atoms the grid half-width encloses 99.9 % of the electrons (spherical average).
 
+## Semiempirical balanced mode (tblite)
+
+GFN2-xTB or GFN1-xTB (Bannwarth, Ehlert, Grimme, JCTC 2019; Grimme, Bannwarth, Shushkov, JCTC
+2017) through the `tblite` Python API, for elements up to Rn. Optimisation uses ASE BFGS on the
+xTB energy and analytic gradient (default fmax 0.01 eV/Å). Reported: total energy (method-specific,
+never compared with HF/DFT), orbital energies, HOMO–LUMO gap, dipole and the method's own atomic
+partial charges. No grid densities are produced in this mode.
+
 ## Isosurfaces
 
 An isosurface value is chosen so the enclosed region contains a stated fraction of the
