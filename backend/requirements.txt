@@ -1,0 +1,12 @@
+# Versions validated in development (2026-10). Install with: pip install -r requirements.txt
+numpy==2.5.3
+scipy==1.18.1
+fastapi
+uvicorn==0.54.0
+pydantic>=2
+pyscf==2.14.0
+ase==3.29.0
+spglib==2.8.0
+rdkit==2026.9.1
+pytest
+httpx
