@@ -49,10 +49,21 @@ def scf_task(params: dict, log: Log, workdir: Path) -> dict:
     """
     atoms = [(a[0], a[1]) for a in params["atoms"]]
     settings = _settings(params)
+    _check_points(params)
+    mol, mf, summary = Q.run_scf(atoms, settings, log)
+    return finalise_scf(mol, mf, summary, atoms, params, log, workdir)
+
+
+def _check_points(params: dict) -> int:
     points = int(params.get("grid_points", 64))
     if not 16 <= points <= 128:
         raise ValueError("grid_points must be between 16 and 128")
-    mol, mf, summary = Q.run_scf(atoms, settings, log)
+    return points
+
+
+def finalise_scf(mol, mf, summary: dict, atoms, params: dict, log: Log, workdir: Path) -> dict:
+    """Store the checkpoint and add density volumes to an SCF summary."""
+    points = _check_points(params)
     chk = workdir / "scf.chk"
     from pyscf.lib import chkfile
     from pyscf.scf import chkfile as scf_chk
@@ -82,6 +93,10 @@ def scf_task(params: dict, log: Log, workdir: Path) -> dict:
 
 
 TASKS = {"scf": scf_task}
+
+from chemmodel.molecular import tasks as _molecular_tasks  # noqa: E402
+
+TASKS.update(_molecular_tasks.TASKS)
 
 
 # ---- post-processing from a stored checkpoint (fast, run in the API) -----
