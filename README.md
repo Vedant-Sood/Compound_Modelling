@@ -5,7 +5,7 @@ electron clouds, molecules, crystals, alloys and compound discovery, built on es
 scientific libraries (PySCF, ASE, spglib, RDKit, pymatgen data) with a React + Three.js
 GPU-rendered interface.
 
-**Status: Phase 1 (atomic modelling foundation) is implemented and validated.** Later phases
+**Status: Phase 1 (Atomic Explorer) and Phase 2 (Molecular Builder) are implemented and validated.** Later phases
 are tracked in [docs/ROADMAP.md](docs/ROADMAP.md). Work split for parallel agents is in
 [docs/HANDOFF.md](docs/HANDOFF.md).
 
@@ -28,6 +28,19 @@ are tracked in [docs/ROADMAP.md](docs/ROADMAP.md). Work split for parallel agent
   its estimated true size and the UI states the magnification whenever it is enlarged.
 - Plots with units and CSV/PNG export (radial distribution, energy levels, SCF convergence);
   image export, Gaussian CUBE export, project save/open, undo/redo, autosave, keyboard shortcuts.
+
+## Molecular Builder
+
+- Build in 3D: add atoms bonded at covalent-radius distances, delete atoms, create bonds and
+  cycle bond orders, add hydrogens (RDKit), perceive bonds from geometry, load examples or SMILES
+  (RDKit ETKDGv3 + MMFF94 starting geometry, labelled as force-field quality).
+- Neutral molecules, ions and radicals (charge and multiplicity checked against the electron count).
+- Fast mode: MMFF94/UFF clean-up. Accurate mode: PySCF HF/DFT single points, geometry
+  optimisation (analytic gradients + ASE BFGS) and rigid bond scans, as background jobs.
+- Distance, angle and dihedral measurement; formula, molar mass, Mulliken charges, dipole,
+  HOMO–LUMO gap; MO energy diagram with click-to-view orbitals; density, spin density and ESP
+  rendered around the ball-and-stick model; optimisation and scan plots; configuration comparison
+  (ΔE only between same formula and method); XYZ/JSON save and open.
 
 ## Quick start
 

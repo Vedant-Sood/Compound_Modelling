@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from chemmodel import __version__
-from chemmodel.api import atomic, calc
+from chemmodel.api import atomic, calc, molecular
 
 app = FastAPI(
     title="Chemical Modelling API",
@@ -26,6 +26,7 @@ app.add_middleware(
 )
 app.include_router(atomic.router)
 app.include_router(calc.router)
+app.include_router(molecular.router)
 
 OPTIONAL_ENGINES = ["numpy", "scipy", "pyscf", "ase", "spglib", "pymatgen.core", "rdkit", "xtb"]
 

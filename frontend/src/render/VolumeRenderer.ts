@@ -88,6 +88,10 @@ const fragmentShader = /* glsl */ `
   uniform float uStep;
   uniform vec2 uAuxRange;
   uniform float uNucR;
+  uniform sampler2D uDepth;
+  uniform int uHasSolid;
+  uniform mat4 uInvViewProj;
+  uniform vec2 uResolution;
   in vec3 vOrigin;
   in vec3 vDirection;
   out vec4 outColor;
@@ -166,7 +170,17 @@ const fragmentShader = /* glsl */ `
     if (b.x > b.y) discard;
     b.x = max(b.x, 0.0);
     float tNuc = hitSphere(vOrigin, dir, uNucR);
-    float tEnd = min(b.y, tNuc);
+    float tSolid = 1e30;
+    if (uHasSolid == 1) {
+      // stop rays at opaque structure geometry (atoms, bonds) drawn in the depth pre-pass
+      vec2 uv = gl_FragCoord.xy / uResolution;
+      float d = texture(uDepth, uv).r;
+      if (d < 1.0) {
+        vec4 w = uInvViewProj * vec4(uv * 2.0 - 1.0, d * 2.0 - 1.0, 1.0);
+        tSolid = dot(w.xyz / w.w - vOrigin, dir);
+      }
+    }
+    float tEnd = min(min(b.y, tNuc), tSolid);
     float jitter = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
     vec4 acc = vec4(0.0);
     float t = b.x + jitter * uStep;
@@ -210,7 +224,7 @@ const fragmentShader = /* glsl */ `
       }
       t += uStep;
     }
-    if (tNuc < b.y && acc.a < 0.98) {
+    if (tNuc < b.y && tNuc < tSolid && acc.a < 0.98) {
       vec3 q = vOrigin + dir * tNuc;
       float diff = abs(dot(normalize(q), -dir));
       vec3 c = vec3(0.95, 0.85, 0.30) * (0.35 + 0.65 * diff);
@@ -239,6 +253,13 @@ export class VolumeRenderer {
   private frame = 0;
   private resizeObserver: ResizeObserver;
   private floatLinear: boolean;
+  /** Opaque structure geometry (atoms, bonds, cells), drawn before the volume. */
+  readonly solids = new THREE.Group();
+  private solidScene = new THREE.Scene();
+  private target: THREE.WebGLRenderTarget;
+  private copyScene = new THREE.Scene();
+  private copyCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+  private raycaster = new THREE.Raycaster();
   onView: (v: ViewInfo) => void = () => {};
 
   constructor(private container: HTMLElement) {
@@ -283,12 +304,39 @@ export class VolumeRenderer {
         uCamPos: { value: new THREE.Vector3() },
         uCamDir: { value: new THREE.Vector3() },
         uOrtho: { value: 0 },
+        uDepth: { value: null },
+        uHasSolid: { value: 0 },
+        uInvViewProj: { value: new THREE.Matrix4() },
+        uResolution: { value: new THREE.Vector2(1, 1) },
       },
     });
     this.mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), this.material);
     this.mesh.visible = false;
     this.scene.add(this.mesh);
     this.scene.add(this.axes);
+
+    this.solidScene.add(this.solids);
+    this.solidScene.add(new THREE.AmbientLight(0xffffff, 0.55));
+    const key = new THREE.DirectionalLight(0xffffff, 1.6);
+    key.position.set(1, 2, 3);
+    this.solidScene.add(key);
+    this.target = new THREE.WebGLRenderTarget(1, 1, { depthTexture: new THREE.DepthTexture(1, 1) });
+    this.material.uniforms.uDepth.value = this.target.depthTexture;
+    this.copyScene.add(
+      new THREE.Mesh(
+        new THREE.PlaneGeometry(2, 2),
+        new THREE.ShaderMaterial({
+          glslVersion: THREE.GLSL3,
+          depthTest: false,
+          depthWrite: false,
+          uniforms: { uTex: { value: this.target.texture } },
+          vertexShader: "out vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }",
+          fragmentShader: `precision highp float; uniform sampler2D uTex; in vec2 vUv; out vec4 c;
+            vec3 toSRGB(vec3 x) { return mix(x * 12.92, 1.055 * pow(x, vec3(1.0 / 2.4)) - 0.055, step(0.0031308, x)); }
+            void main() { vec4 t = texture(uTex, vUv); c = vec4(toSRGB(t.rgb), 1.0); }`,
+        }),
+      ),
+    );
 
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(container);
@@ -317,6 +365,7 @@ export class VolumeRenderer {
     this.resizeObserver.disconnect();
     this.controls.dispose();
     this.textures.forEach((t) => t.dispose());
+    this.target.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();
   }
@@ -325,6 +374,9 @@ export class VolumeRenderer {
     const w = Math.max(this.container.clientWidth, 1);
     const h = Math.max(this.container.clientHeight, 1);
     this.renderer.setSize(w, h);
+    const buf = this.renderer.getDrawingBufferSize(new THREE.Vector2());
+    this.target.setSize(buf.x, buf.y);
+    this.material.uniforms.uResolution.value.copy(buf);
     this.persp.aspect = w / h;
     this.persp.updateProjectionMatrix();
     this.updateOrthoFrustum();
@@ -472,7 +524,21 @@ export class VolumeRenderer {
     u.uCamPos.value.copy(cam.position);
     u.uCamDir.value.copy(new THREE.Vector3(0, 0, -1).applyQuaternion(cam.quaternion));
     u.uOrtho.value = cam === this.ortho ? 1 : 0;
-    this.renderer.render(this.scene, cam);
+    const hasSolid = this.solids.children.some((c) => c.visible);
+    u.uHasSolid.value = hasSolid ? 1 : 0;
+    if (hasSolid) {
+      cam.updateMatrixWorld();
+      u.uInvViewProj.value.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse).invert();
+      this.renderer.setRenderTarget(this.target);
+      this.renderer.render(this.solidScene, cam);
+      this.renderer.setRenderTarget(null);
+      this.renderer.render(this.copyScene, this.copyCamera);
+      this.renderer.autoClear = false;
+      this.renderer.render(this.scene, cam);
+      this.renderer.autoClear = true;
+    } else {
+      this.renderer.render(this.scene, cam);
+    }
     this.onView({
       pmPerPx,
       viewWidthPm: pmPerPx * this.renderer.domElement.clientWidth,
@@ -480,6 +546,46 @@ export class VolumeRenderer {
       nucleusExaggeration: this.nucleusRadiusPm > 0 ? shown / this.nucleusRadiusPm : 1,
       orthographic: cam === this.ortho,
     });
+  }
+
+  requestRender() {
+    this.dirty = true;
+  }
+
+  /** Centre the view on a point (pm) at a distance that shows `radiusPm`. */
+  frameView(centrePm: THREE.Vector3, radiusPm: number) {
+    const dir = this.persp.position.clone().sub(this.controls.target).normalize();
+    if (dir.lengthSq() === 0) dir.set(0.4, 0.3, 1).normalize();
+    const d = radiusPm / Math.sin(THREE.MathUtils.degToRad(this.persp.fov / 2)) + radiusPm * 0.2;
+    this.controls.target.copy(centrePm);
+    this.persp.position.copy(centrePm).addScaledVector(dir, d);
+    this.ortho.position.copy(this.persp.position);
+    this.ortho.zoom = 1;
+    this.updateOrthoFrustum();
+    this.controls.update();
+    this.dirty = true;
+  }
+
+  /** Raycast against objects in the solid layer. */
+  pick(clientX: number, clientY: number, objects: THREE.Object3D[]): THREE.Intersection[] {
+    const r = this.renderer.domElement.getBoundingClientRect();
+    const ndc = new THREE.Vector2(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1);
+    this.raycaster.setFromCamera(ndc, this.camera);
+    return this.raycaster.intersectObjects(objects, false);
+  }
+
+  /** Point (pm) where the pointer ray meets the plane through the orbit target facing the camera. */
+  pointOnViewPlane(clientX: number, clientY: number): THREE.Vector3 | null {
+    const r = this.renderer.domElement.getBoundingClientRect();
+    const ndc = new THREE.Vector2(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1);
+    this.raycaster.setFromCamera(ndc, this.camera);
+    const normal = new THREE.Vector3(0, 0, -1).applyQuaternion(this.camera.quaternion);
+    const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(normal, this.controls.target);
+    return this.raycaster.ray.intersectPlane(plane, new THREE.Vector3());
+  }
+
+  get activeCamera(): THREE.Camera {
+    return this.camera;
   }
 
   /** Render at `scale` x resolution and return a PNG data URL. */

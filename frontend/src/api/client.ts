@@ -141,6 +141,7 @@ export interface SCFResult {
   warnings: string[];
   grid: GridInfo;
   volumes: { density: EncodedArray; spin_density?: EncodedArray };
+  atoms: [string, number[]][];
 }
 
 export interface Job<R = SCFResult> {
