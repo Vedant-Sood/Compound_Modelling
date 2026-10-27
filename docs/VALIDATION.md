@@ -1,6 +1,6 @@
 # Validation
 
-`cd backend && python -m pytest` runs 126 tests. Reference points:
+`cd backend && python -m pytest` runs 130 tests (the 4 xTB tests are skipped without tblite). Reference points:
 
 | Test | Reference |
 |---|---|
@@ -31,6 +31,8 @@
 | MMFF94 relaxes distorted CH₄ to 109.47° | tetrahedral geometry |
 | Bond perception from bare XYZ (ethylene C=C) | RDKit DetermineBonds |
 | Radical and ion electron accounting, impossible multiplicities rejected | — |
+| H₂O GFN2-xTB E ≈ −5.07 Eh, charges sum to 0, O negative; optimised r(OH) 0.96 ± 0.02 Å | xtb reference output |
+| xTB job through the API (optimise + single point); Z > 86 rejected | — |
 
 Frontend (`npm test`): unit choice and scale bar, representation levels, enclosed threshold,
 CUBE layout, undo/redo and quantum-number constraints, measurement geometry, XYZ export.

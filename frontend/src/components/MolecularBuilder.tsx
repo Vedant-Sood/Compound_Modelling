@@ -9,6 +9,7 @@ import {
   type Analysis,
   type DisplayData,
   type GeomOptResult,
+  type XTBResult,
   type MoleculeJSON,
   type ScanResult,
 } from "../api/molecular";
@@ -106,7 +107,8 @@ export function MolecularBuilder() {
   const [method, setMethod] = useState<"HF" | "DFT">("HF");
   const [xc, setXc] = useState("B3LYP");
   const [basis, setBasis] = useState("6-31g*");
-  const [job, setJob] = useState<Job<SCFResult | GeomOptResult | ScanResult> | null>(null);
+  const [xtbMethod, setXtbMethod] = useState("GFN2-xTB");
+  const [job, setJob] = useState<Job<SCFResult | GeomOptResult | ScanResult | XTBResult> | null>(null);
   const [jobMolKey, setJobMolKey] = useState("");
   const [view, setView] = useState<View>("none");
   const [orbitalSel, setOrbitalSel] = useState<{ spin: string; index: number } | null>(null);
@@ -274,18 +276,19 @@ export function MolecularBuilder() {
   const quantumBody = () => ({ molecule: mol, method, xc, basis, grid_points: 64 });
   const methodKey = `${method}${method === "DFT" ? `/${xc}` : ""}/${basis}`;
 
-  const submit = async (kind: "scf" | "geomopt" | "scan") => {
+  const submit = async (kind: "scf" | "geomopt" | "scan" | "xtb" | "xtbopt") => {
     try {
-      let j: Job<SCFResult | GeomOptResult | ScanResult>;
+      let j: Job<SCFResult | GeomOptResult | ScanResult | XTBResult>;
       if (kind === "scf") j = await molApi.scf(quantumBody());
       else if (kind === "geomopt") j = await molApi.geomopt(quantumBody());
+      else if (kind === "xtb" || kind === "xtbopt") j = await molApi.xtb({ molecule: mol, method: xtbMethod, optimise: kind === "xtbopt" });
       else {
         if (selected.length !== 2) throw new Error("select exactly two atoms (Select tool) to scan their distance");
         j = await molApi.scan({ ...quantumBody(), i: selected[0], j: selected[1], r_min: scanRange.min, r_max: scanRange.max, points: scanRange.points });
       }
       setJobMolKey(molKey);
-      log(`Submitted ${kind} ${methodKey} (job ${j.id})`);
-      if (j.state === "done") finish((await api.job(j.id)) as Job<SCFResult | GeomOptResult | ScanResult>);
+      log(`Submitted ${kind} ${kind.startsWith("xtb") ? xtbMethod : methodKey} (job ${j.id})`);
+      if (j.state === "done") finish((await api.job(j.id)) as Job<SCFResult | GeomOptResult | ScanResult | XTBResult>);
       else setJob(j);
     } catch (e) {
       log(`Submit failed: ${(e as Error).message}`, "error");
@@ -293,7 +296,7 @@ export function MolecularBuilder() {
   };
 
   const finish = useCallback(
-    (j: Job<SCFResult | GeomOptResult | ScanResult>) => {
+    (j: Job<SCFResult | GeomOptResult | ScanResult | XTBResult>) => {
       if (j.error) log(j.error, "error");
       setJob(j);
       if (j.state !== "done") return;
@@ -306,6 +309,18 @@ export function MolecularBuilder() {
         log(`Optimised geometry loaded (E = ${r.energy_Eh.toFixed(8)} Eh)`);
         setTab("opt");
       }
+      if (j.kind === "xtb") {
+        const r = j.result as XTBResult;
+        if (r.optimisation) {
+          const optimised = { ...r.molecule, bonds: mol.bonds };
+          setMol(optimised);
+          setJobMolKey(JSON.stringify(optimised));
+          log(`${r.solver} optimised geometry loaded`);
+          setTab("opt");
+        }
+        log(`${r.solver}: E = ${r.energy_Eh.toFixed(8)} Eh. Balanced mode gives no electron-density volumes; use the PySCF mode for densities and orbitals.`);
+        return;
+      }
       if (j.kind === "scan") setTab("scan");
       else setView((v) => (v === "none" ? "density" : v));
     },
@@ -317,7 +332,7 @@ export function MolecularBuilder() {
     let seen = job.logs.length;
     const t = setInterval(async () => {
       try {
-        const j = (await api.job(job.id)) as Job<SCFResult | GeomOptResult | ScanResult>;
+        const j = (await api.job(job.id)) as Job<SCFResult | GeomOptResult | ScanResult | XTBResult>;
         j.logs.slice(seen).forEach((l) => log(l.message));
         seen = j.logs.length;
         if (j.state !== "running") {
@@ -332,10 +347,12 @@ export function MolecularBuilder() {
     return () => clearInterval(t);
   }, [job, log, finish]);
 
-  const scfResult = job?.state === "done" && job.kind !== "scan" ? (job.result as SCFResult | GeomOptResult) : undefined;
+  const scfResult = job?.state === "done" && job.kind !== "scan" && job.kind !== "xtb" ? (job.result as SCFResult | GeomOptResult) : undefined;
+  const xtbResult = job?.state === "done" && job.kind === "xtb" ? (job.result as XTBResult) : undefined;
   const scanResult = job?.state === "done" && job.kind === "scan" ? (job.result as ScanResult) : undefined;
   const stale = !!scfResult && jobMolKey !== molKey;
-  const opt = scfResult && "optimisation" in scfResult ? (scfResult as GeomOptResult).optimisation : null;
+  const opt = scfResult && "optimisation" in scfResult ? (scfResult as GeomOptResult).optimisation : xtbResult?.optimisation ?? null;
+  const finalEnergy = scfResult?.energy_Eh ?? xtbResult?.energy_Eh ?? 0;
 
   // volume for the selected view
   useEffect(() => {
@@ -613,7 +630,6 @@ export function MolecularBuilder() {
           <button className="primary" disabled={!mol.atoms.length || job?.state === "running"} onClick={() => submit("geomopt")}>Optimise geometry</button>
           {job?.state === "running" && <button onClick={() => api.cancelJob(job.id).then((j) => setJob(j as Job<SCFResult>))}>Cancel</button>}
         </div>
-        <div className="muted small">Semiempirical (balanced) mode: not installed; see docs/LIMITATIONS.md.</div>
         <details>
           <summary className="small">Bond scan (energy vs distance)</summary>
           <div className="grid3">
@@ -623,6 +639,15 @@ export function MolecularBuilder() {
           </div>
           <button disabled={selected.length !== 2 || job?.state === "running"} onClick={() => submit("scan")}>Scan selected bond {selected.length === 2 ? selected.join("–") : ""}</button>
         </details>
+        <h3>Balanced mode (semiempirical xTB)</h3>
+        <div className="row">
+          <select value={xtbMethod} onChange={(e) => setXtbMethod(e.target.value)}>
+            {["GFN2-xTB", "GFN1-xTB"].map((x) => <option key={x}>{x}</option>)}
+          </select>
+          <button disabled={!mol.atoms.length || job?.state === "running"} onClick={() => submit("xtb")}>Single point</button>
+          <button disabled={!mol.atoms.length || job?.state === "running"} onClick={() => submit("xtbopt")}>Optimise</button>
+        </div>
+        <div className="muted small">Tight-binding (tblite, elements up to Rn): fast geometries and trends for larger molecules. Needs the optional tblite package; energies are not comparable with HF/DFT and no density volumes are produced.</div>
         {job && <div className="small muted">Job {job.kind}: {job.state}{job.cached ? " (cached)" : ""} · {job.elapsed_s.toFixed(1)} s</div>}
 
         {scfResult && (
@@ -649,6 +674,30 @@ export function MolecularBuilder() {
               </tbody>
             </table>
             <div className="muted small">Mulliken populations are basis-set dependent.</div>
+          </>
+        )}
+
+        {xtbResult && (
+          <>
+            <table className="props">
+              <tbody>
+                <tr><th>{xtbResult.solver} energy</th><td>{xtbResult.energy_Eh.toFixed(8)} Eh</td></tr>
+                {xtbResult.optimisation && <tr><th>Optimisation</th><td>{xtbResult.optimisation.converged ? "converged" : "NOT converged"}, {xtbResult.optimisation.steps.length} steps (fmax {xtbResult.optimisation.fmax_eV_per_A} eV/Å)</td></tr>}
+                <tr><th>HOMO–LUMO gap</th><td>{xtbResult.homo_lumo_gap_eV?.toFixed(3) ?? "—"} eV</td></tr>
+                <tr><th>Dipole moment</th><td>{Math.hypot(...xtbResult.dipole_debye).toFixed(3)} D</td></tr>
+                <tr><th>Engine</th><td>{xtbResult.engine} {xtbResult.engine_version}</td></tr>
+                <tr><th>Wall time</th><td>{xtbResult.wall_time_s.toFixed(2)} s</td></tr>
+              </tbody>
+            </table>
+            {xtbResult.warnings.map((w) => <div key={w} className="warn small">{w}</div>)}
+            <h3>Atomic charges ({xtbResult.charge_model})</h3>
+            <table className="props">
+              <tbody>
+                {xtbResult.atomic_charges.map((q, k) => (
+                  <tr key={k}><th>{k} {xtbResult.molecule.atoms[k]?.symbol}</th><td>{q >= 0 ? "+" : ""}{q.toFixed(3)} e</td></tr>
+                ))}
+              </tbody>
+            </table>
           </>
         )}
 
@@ -738,9 +787,9 @@ export function MolecularBuilder() {
               </div>
             ) : <div className="muted">Run a calculation to see molecular orbital energies.</div>)}
           {tab === "opt" &&
-            (scfResult && opt ? (
+            (opt ? (
               <div className="two-col">
-                <LineChart title="Energy during optimisation" series={[{ name: "E", x: opt.steps.map((s) => s.step), y: opt.steps.map((s) => (s.energy_Eh - scfResult.energy_Eh) * KJ_PER_HARTREE) }]} xLabel="step" yLabel="E − E_final (kJ/mol)" csvName="optimisation-energy" />
+                <LineChart title="Energy during optimisation" series={[{ name: "E", x: opt.steps.map((s) => s.step), y: opt.steps.map((s) => (s.energy_Eh - finalEnergy) * KJ_PER_HARTREE) }]} xLabel="step" yLabel="E − E_final (kJ/mol)" csvName="optimisation-energy" />
                 <LineChart title="Maximum force" series={[{ name: "fmax", x: opt.steps.map((s) => s.step), y: opt.steps.map((s) => s.fmax_eV_per_A) }]} xLabel="step" yLabel="max |F| (eV/Å)" csvName="optimisation-force" />
               </div>
             ) : <div className="muted">Run “Optimise geometry” to see convergence.</div>)}

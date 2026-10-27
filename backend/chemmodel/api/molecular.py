@@ -180,6 +180,28 @@ def submit_scf(body: QuantumIn):
         raise HTTPException(422, str(exc)) from exc
 
 
+class XTBIn(BaseModel):
+    molecule: MoleculeIn
+    method: Literal["GFN2-xTB", "GFN1-xTB"] = "GFN2-xTB"
+    optimise: bool = False
+    fmax_eV_per_A: float = Field(0.01, gt=0, le=1)
+
+
+@router.post("/jobs/xtb")
+def submit_xtb(body: XTBIn):
+    from chemmodel.molecular import xtb
+
+    if not xtb.available():
+        raise HTTPException(501, "Balanced mode needs the optional tblite package (pip install tblite).")
+    _mol(body.molecule)
+    params = body.model_dump()
+    params["molecule"]["atoms"] = [{"symbol": a["symbol"], "xyz": list(a["xyz"])} for a in params["molecule"]["atoms"]]
+    try:
+        return manager.submit("xtb", params).to_dict(include_result=False)
+    except (KeyError, ValueError) as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
 @router.post("/jobs/geomopt")
 def submit_geomopt(body: GeomOptIn):
     return _submit("geomopt", body)

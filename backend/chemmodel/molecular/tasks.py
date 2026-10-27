@@ -70,4 +70,27 @@ def scan_task(params: dict, log: Log, workdir: Path) -> dict:
     }
 
 
-TASKS = {"geomopt": geomopt_task, "scan": scan_task}
+def xtb_task(params: dict, log: Log, workdir: Path) -> dict:
+    """params: molecule, method (GFN2-xTB | GFN1-xTB), optimise (bool), fmax_eV_per_A."""
+    from chemmodel.molecular import xtb
+
+    mol = Molecule.from_json(params["molecule"])
+    mol.check_spin()
+    method = params.get("method", "GFN2-xTB")
+    out = None
+    if params.get("optimise", False):
+        final, steps, converged = xtb.optimise(mol, method, log, float(params.get("fmax_eV_per_A", 0.01)))
+        log(f"{method} optimisation {'converged' if converged else 'did NOT converge'} after {len(steps)} steps")
+        out = {"optimiser": "ASE BFGS", "fmax_eV_per_A": float(params.get("fmax_eV_per_A", 0.01)), "converged": converged, "steps": steps}
+        mol = final
+    res = xtb.singlepoint(mol, method)
+    log(f"{method}: E = {res['energy_Eh']:.10f} Eh")
+    res["molecule"] = mol.to_json()
+    if out is not None:
+        res["optimisation"] = out
+        if not out["converged"]:
+            res["warnings"].append("Geometry optimisation did not reach the force threshold.")
+    return res
+
+
+TASKS = {"geomopt": geomopt_task, "scan": scan_task, "xtb": xtb_task}

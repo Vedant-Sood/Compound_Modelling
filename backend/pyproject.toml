@@ -17,6 +17,8 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "httpx>=0.27"]
+# Balanced (semiempirical GFN-xTB) mode
+xtb = ["tblite>=0.4"]
 # Only needed to regenerate chemmodel/data/elements.json
 data = ["pymatgen-core", "mendeleev"]
 

@@ -37,6 +37,8 @@ are tracked in [docs/ROADMAP.md](docs/ROADMAP.md). Work split for parallel agent
 - Neutral molecules, ions and radicals (charge and multiplicity checked against the electron count).
 - Fast mode: MMFF94/UFF clean-up. Accurate mode: PySCF HF/DFT single points, geometry
   optimisation (analytic gradients + ASE BFGS) and rigid bond scans, as background jobs.
+  Balanced mode (optional `tblite`): GFN2-xTB / GFN1-xTB single points and optimisations with
+  xTB charges, dipole and gap, for larger molecules (no density volumes).
 - Distance, angle and dihedral measurement; formula, molar mass, Mulliken charges, dipole,
   HOMO–LUMO gap; MO energy diagram with click-to-view orbitals; density, spin density and ESP
   rendered around the ball-and-stick model; optimisation and scan plots; configuration comparison

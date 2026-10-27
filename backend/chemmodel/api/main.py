@@ -28,7 +28,7 @@ app.include_router(atomic.router)
 app.include_router(calc.router)
 app.include_router(molecular.router)
 
-OPTIONAL_ENGINES = ["numpy", "scipy", "pyscf", "ase", "spglib", "pymatgen.core", "rdkit", "xtb"]
+OPTIONAL_ENGINES = ["numpy", "scipy", "pyscf", "ase", "spglib", "pymatgen.core", "rdkit", "tblite"]
 
 
 @app.get("/api/health")
