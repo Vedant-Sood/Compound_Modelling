@@ -44,6 +44,18 @@ are tracked in [docs/ROADMAP.md](docs/ROADMAP.md). Work split for parallel agent
   rendered around the ball-and-stick model; optimisation and scan plots; configuration comparison
   (ΔE only between same formula and method); XYZ/JSON save and open.
 
+## Crystal Explorer
+
+- 14 reference crystals built from their space group and Wyckoff positions with cited
+  experimental lattice parameters (NaCl, CsCl, CaF₂, ZnS, Cu, Al, α-Fe, W, Mg, diamond, Si,
+  graphite, rutile TiO₂, SrTiO₃), or a custom crystal from lattice parameters + basis + space group.
+- Many atoms at once: show n₁×n₂×n₃ cells with boundary images and first-shell bonds; click an
+  atom to highlight its coordination shell and see CN, distances and shell angles; click a second
+  atom to measure.
+- spglib symmetry (space group, crystal system, point group, Wyckoff sites), primitive and
+  conventional cells, supercells, density, Miller planes with d-spacing, and hypothetical
+  vacancies, substitutions and interstitials (clearly labelled, unrelaxed).
+
 ## Quick start
 
 ### Linux / WSL2

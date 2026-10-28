@@ -1,0 +1,5 @@
+.crystal input.n { width: 52px; }
+.crystal input.sym { width: 52px; }
+.crystal textarea { width: 100%; font-family: monospace; font-size: 12px; background: var(--bg); color: inherit; border: 1px solid var(--border); border-radius: 4px; }
+.crystal label.check { display: flex; gap: 6px; align-items: center; margin: 4px 0; }
+.crystal table.sites td, .crystal table.sites th { padding: 2px 4px; font-size: 12px; }

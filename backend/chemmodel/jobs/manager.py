@@ -22,6 +22,9 @@ from chemmodel import __version__
 
 CACHE_DIR = Path(os.environ.get("CHEMMODEL_CACHE", Path.home() / ".chemmodel" / "cache"))
 
+# Bump when a task's result schema or numerics change, so stale cached results are not reused.
+CACHE_SCHEMA = 2
+
 TaskFn = Callable[[dict, Callable[[str], None], Path], dict]
 
 
@@ -32,7 +35,7 @@ def _registry() -> dict[str, TaskFn]:
 
 
 def job_key(kind: str, params: dict) -> str:
-    blob = json.dumps({"kind": kind, "params": params, "version": __version__}, sort_keys=True)
+    blob = json.dumps({"kind": kind, "params": params, "version": __version__, "schema": CACHE_SCHEMA}, sort_keys=True)
     return hashlib.sha256(blob.encode()).hexdigest()[:24]
 
 
@@ -46,7 +49,11 @@ def _worker(kind: str, params: dict, workdir: str, queue) -> None:
 
     try:
         result = _registry()[kind](params, log, Path(workdir))
-        Path(workdir, "result.json").write_text(json.dumps(result))
+        # write-then-rename so a cancelled or crashed job never leaves a truncated
+        # result.json that later loads as a "cached" result
+        tmp = Path(workdir, "result.json.tmp")
+        tmp.write_text(json.dumps(result))
+        os.replace(tmp, Path(workdir, "result.json"))
         queue.put(("done", None))
     except Exception as exc:  # reported to the client, not swallowed
         queue.put(("error", f"{type(exc).__name__}: {exc}\n{traceback.format_exc(limit=4)}"))
