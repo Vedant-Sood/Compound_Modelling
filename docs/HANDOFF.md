@@ -17,7 +17,7 @@ Merged/available on `main` once the Phase 1 PR lands (until then branch from
 - Docs: README, ARCHITECTURE, METHODOLOGY, LIMITATIONS, VALIDATION, ROADMAP.
 
 Environment that is known to work: Python 3.13, numpy 2.5, scipy 1.18, PySCF 2.14, ASE 3.29,
-spglib 2.8, RDKit 2026.09, Node 22, React 18.3, Three.js 0.169, Vite 5.4.
+spglib 2.8, RDKit 2026.09, Node 22, React 18.3, Three.js 0.169, Vite 6.4, Vitest 4.1 (Node ≥ 20).
 Note: `pip install pymatgen` currently fails to build `bibtexparser`; only the data-generation
 script needs pymatgen, and it works with `pymatgen-core` installed with `--no-deps` plus its
 runtime deps.

@@ -444,7 +444,7 @@ export class VolumeRenderer {
     }
     const [nx, ny, nz] = field.shape;
     const make = (data: Float32Array) => {
-      const tex = new THREE.Data3DTexture(data, nx, ny, nz);
+      const tex = new THREE.Data3DTexture(data as Float32Array<ArrayBuffer>, nx, ny, nz); // never SharedArrayBuffer-backed
       tex.format = THREE.RedFormat;
       tex.type = THREE.FloatType;
       const filter = this.floatLinear ? THREE.LinearFilter : THREE.NearestFilter;
