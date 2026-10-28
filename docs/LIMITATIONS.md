@@ -25,5 +25,8 @@
   direction; use force-field clean-up or quantum optimisation for real geometries.
 - WebGL float-texture linear filtering is required for smooth rendering; without it the renderer
   falls back to nearest-neighbour sampling.
-- Crystal, alloy, compound-discovery and molecular-dynamics workspaces are not built
-  yet (see ROADMAP.md); the UI says so instead of showing placeholder results.
+- Alloy, compound-discovery and molecular-dynamics workspaces are not built yet (see
+  ROADMAP.md); the UI says so instead of showing placeholder results.
+- Crystal Explorer: no electronic-structure calculation for periodic systems yet (no periodic
+  DFT, band structures or densities of states); defects are unrelaxed; spheres use covalent radii
+  for display only; CIF/POSCAR import is part of workstream C.

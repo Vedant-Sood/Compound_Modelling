@@ -36,6 +36,18 @@ xTB energy and analytic gradient (default fmax 0.01 eV/Å). Reported: total ener
 never compared with HF/DFT), orbital energies, HOMO–LUMO gap, dipole and the method's own atomic
 partial charges. No grid densities are produced in this mode.
 
+## Crystals
+
+Reference structures are expanded from the space group and Wyckoff representatives with
+`ase.spacegroup.crystal`, using the experimental lattice parameters listed (with source) in
+`crystal/structures.py`. Symmetry comes from spglib (`symprec` 10⁻³ Å by default, reported).
+Neighbours are found under periodic boundary conditions with the ASE neighbour list. The first
+coordination shell of a site contains every neighbour within (1 + 0.1) × that site's nearest
+distance; the next shell distance is also reported. Density = Σ standard atomic masses / (N_A ×
+cell volume). Interplanar spacing d_hkl = 1/|h a* + k b* + l c*|. Defects are built by editing the
+cell and are never relaxed; the UI labels them hypothetical. Sphere sizes in the viewer are a
+fraction of the covalent radius and carry no physical meaning for ionic or metallic crystals.
+
 ## Isosurfaces
 
 An isosurface value is chosen so the enclosed region contains a stated fraction of the
