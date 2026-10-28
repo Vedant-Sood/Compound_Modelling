@@ -250,6 +250,20 @@ export function AtomicExplorer({ elements }: { elements: ElementSummary[] }) {
     return () => clearInterval(timer);
   }, [job, log]);
 
+  // An SCF job belongs to one species: drop it (and whatever it drew) when the
+  // element or charge changes, so a previous atom's density is never shown
+  // under the new atom's name.
+  useEffect(() => {
+    const atoms = job?.params.atoms as [string, number[]][] | undefined;
+    if (job && (atoms?.[0]?.[0] !== s.symbol || job.params.charge !== s.charge)) setJob(null);
+    if (s.model === "scf") {
+      setField(null);
+      setBadge(null);
+      setFieldTitle("");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [s.symbol, s.charge]);
+
   const result = job?.state === "done" ? job.result : undefined;
 
   useEffect(() => {

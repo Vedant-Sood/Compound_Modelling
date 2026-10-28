@@ -49,11 +49,11 @@ class GeomOptIn(QuantumIn):
 
 
 class ScanIn(QuantumIn):
-    i: int
-    j: int
-    r_min: float
-    r_max: float
-    points: int = 15
+    i: int = Field(..., ge=0)
+    j: int = Field(..., ge=0)
+    r_min: float = Field(..., gt=0)
+    r_max: float = Field(..., gt=0)
+    points: int = Field(15, ge=2, le=60)
 
 
 def _mol(m: MoleculeIn, check_spin: bool = True) -> S.Molecule:
@@ -97,7 +97,7 @@ def add_hydrogens(m: MoleculeIn):
 
     mol = _mol(m, check_spin=False)
     if not mol.bonds and len(mol.symbols) > 1:
-        mol.bonds = S.bonds_from_rdkit(S.to_rdkit(mol, perceive_bonds=True))
+        mol.bonds = _perceived_bonds(mol)
     rd = S.to_rdkit(mol)
     for a in rd.GetAtoms():
         a.SetNoImplicit(False)
@@ -114,8 +114,11 @@ def add_hydrogens(m: MoleculeIn):
 
 @router.post("/from-smiles")
 def from_smiles(body: dict):
+    smiles = str(body.get("smiles", "")).strip()
+    if not smiles:
+        raise HTTPException(422, "enter a SMILES string")
     try:
-        mol, info = S.from_smiles(str(body.get("smiles", "")))
+        mol, info = S.from_smiles(smiles)
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
     return {"molecule": mol.to_json(), **info, "analysis": S.perceive(mol)}
@@ -124,13 +127,18 @@ def from_smiles(body: dict):
 @router.post("/analyze")
 def analyze(m: MoleculeIn, perceive_bonds: bool = False):
     mol = _mol(m, check_spin=False)
-    if perceive_bonds or not mol.bonds:
+    note = None
+    if (perceive_bonds or not mol.bonds) and len(mol.symbols) > 1:
         try:
             rd = S.to_rdkit(S.Molecule(mol.symbols, mol.coords, [], mol.charge, mol.multiplicity), perceive_bonds=True)
             mol.bonds = S.bonds_from_rdkit(rd)
         except Exception as exc:  # RDKit cannot always assign bond orders
-            raise HTTPException(422, f"bond perception failed: {exc}") from exc
+            if perceive_bonds:  # explicitly requested: report it
+                raise HTTPException(422, str(exc).splitlines()[0]) from exc
+            note = f"No bonds drawn and none could be perceived ({str(exc).splitlines()[0]})."
     info = S.perceive(mol)
+    if note:
+        info["problems"] = [note] + [p for p in info["problems"] if "bond perception" not in p]
     return {
         "molecule": mol.to_json(),
         "analysis": info,
@@ -149,16 +157,29 @@ def _com(mol: S.Molecule) -> list[float]:
 @router.post("/forcefield-optimize")
 def forcefield_optimize(m: MoleculeIn):
     mol = _mol(m, check_spin=False)
-    if not mol.bonds:
-        mol.bonds = S.bonds_from_rdkit(S.to_rdkit(mol, perceive_bonds=True))
+    if not mol.bonds and len(mol.symbols) > 1:
+        mol.bonds = _perceived_bonds(mol)
     try:
         return force_field_optimise(mol)
+    except Exception as exc:  # RDKit force-field setup raises several exception types
+        raise HTTPException(422, f"force-field clean-up failed: {str(exc).splitlines()[0] if str(exc) else type(exc).__name__}") from exc
+
+
+def _perceived_bonds(mol: S.Molecule) -> list[tuple[int, int, float]]:
+    try:
+        return S.bonds_from_rdkit(S.to_rdkit(mol, perceive_bonds=True))
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
 
 
+def _quantum_preflight(mol: S.Molecule, body: QuantumIn) -> None:
+    from chemmodel.api.calc import preflight_scf
+
+    preflight_scf(mol.atoms, {**body.model_dump(exclude={"molecule"}), "charge": mol.charge, "spin": mol.multiplicity - 1})
+
+
 def _submit(kind: str, body: QuantumIn):
-    _mol(body.molecule)
+    _quantum_preflight(_mol(body.molecule), body)
     params = body.model_dump()
     params["molecule"]["atoms"] = [{"symbol": a["symbol"], "xyz": list(a["xyz"])} for a in params["molecule"]["atoms"]]
     try:
@@ -170,6 +191,7 @@ def _submit(kind: str, body: QuantumIn):
 @router.post("/jobs/scf")
 def submit_scf(body: QuantumIn):
     mol = _mol(body.molecule)
+    _quantum_preflight(mol, body)
     params = body.model_dump(exclude={"molecule"})
     params["atoms"] = [[s, x] for s, x in mol.atoms]
     params["charge"] = mol.charge
@@ -209,4 +231,9 @@ def submit_geomopt(body: GeomOptIn):
 
 @router.post("/jobs/scan")
 def submit_scan(body: ScanIn):
+    n = len(body.molecule.atoms)
+    if body.i == body.j or body.i >= n or body.j >= n:
+        raise HTTPException(422, f"scan needs two different atoms with indices below {n}")
+    if body.r_min >= body.r_max:
+        raise HTTPException(422, "r_min must be smaller than r_max")
     return _submit("scan", body)
