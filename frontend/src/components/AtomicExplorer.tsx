@@ -25,6 +25,7 @@ import { SliceView } from "./SliceView";
 import { Splitter } from "./Splitter";
 import { useLog } from "./useLog";
 import { Console, dataURLtoBlob } from "./common";
+import { ViewportToolbar } from "./ViewportToolbar";
 
 const L_LETTERS = "spdfghik";
 const AXES = ["x", "y", "z"] as const;
@@ -34,7 +35,7 @@ interface Badge {
   tone: "exact" | "approx" | "computed";
 }
 
-export function AtomicExplorer({ elements }: { elements: ElementSummary[] }) {
+export function AtomicExplorer({ elements, active = true }: { elements: ElementSummary[]; active?: boolean }) {
   const [hist, dispatch] = useReducer(historyReducer, undefined, () => ({
     past: [],
     present: loadAutosave(),
@@ -336,6 +337,7 @@ export function AtomicExplorer({ elements }: { elements: ElementSummary[] }) {
 
   // ---- keyboard shortcuts ----------------------------------------------------
   useEffect(() => {
+    if (!active) return;
     const onKey = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement).tagName;
       if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") return;
@@ -345,8 +347,7 @@ export function AtomicExplorer({ elements }: { elements: ElementSummary[] }) {
       else if (mod && e.key.toLowerCase() === "s") {
         e.preventDefault();
         saveProject();
-      } else if (!mod && e.key === "r") rendererRef.current?.resetView();
-      else if (!mod && e.key === "o") set({ orthographic: !s.orthographic });
+      } else if (!mod && e.key === "o") set({ orthographic: !s.orthographic });
       else if (!mod && e.key === "i") set({ mode: s.mode === "volume" ? "isosurface" : "volume" });
       else if (!mod && e.key === "c") set({ clipEnabled: !s.clipEnabled });
     };
@@ -457,7 +458,7 @@ export function AtomicExplorer({ elements }: { elements: ElementSummary[] }) {
           <button onClick={() => rendererRef.current && download(`${s.symbol}-view.png`, dataURLtoBlob(rendererRef.current.exportPNG(3)))}>Image ×3</button>
           <button onClick={exportCube} disabled={!field}>CUBE</button>
         </div>
-        <div className="muted small">Shortcuts: R reset view · O ortho/persp · I iso/volume · C clip</div>
+        <div className="muted small">Shortcuts: O ortho/persp · I iso/volume · C clip · press ? for all</div>
       </aside>
 
       <Splitter variable="--left" direction={1} min={220} max={560} />
@@ -467,6 +468,20 @@ export function AtomicExplorer({ elements }: { elements: ElementSummary[] }) {
       {/* ---------------- viewport ---------------- */}
       <main className="viewport-wrap">
         <div className="viewport" ref={viewportRef} />
+        <ViewportToolbar
+          renderer={rendererRef}
+          onFit={() => rendererRef.current?.resetView()}
+          orthographic={s.orthographic}
+          onOrthographic={(on) => set({ orthographic: on })}
+          imageName={`${s.symbol}-view.png`}
+          active={active}
+        />
+        {!field && !busy && s.model === "scf" && (
+          <div className="empty-state">
+            <div className="empty-title">No electron density yet</div>
+            <div className="muted">Choose a method and basis set in the right panel, then press <b>Run calculation</b>.</div>
+          </div>
+        )}
         <div className="overlay top-left">
           {badge && <div className={`badge ${badge.tone}`}>{badge.text}</div>}
           <div className="field-title">{fieldTitle}</div>
@@ -477,7 +492,7 @@ export function AtomicExplorer({ elements }: { elements: ElementSummary[] }) {
                 : `Isosurface encloses ${(s.enclosedFraction * 100).toFixed(0)} % of the ${field.kind === "signed" ? "|spin density|" : "probability"} on the grid`}
             </div>
           )}
-          {busy && <div className="small">Computing…</div>}
+          {busy && <div className="small busy-dot">Computing…</div>}
         </div>
         <div className="overlay bottom-left">
           {scaleBar && (

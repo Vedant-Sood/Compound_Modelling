@@ -260,6 +260,8 @@ export class VolumeRenderer {
   private copyScene = new THREE.Scene();
   private copyCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
   private raycaster = new THREE.Raycaster();
+  private autoRotate = false;
+  private lastFrame: { centre: THREE.Vector3; radius: number } | null = null;
   onView: (v: ViewInfo) => void = () => {};
 
   constructor(private container: HTMLElement) {
@@ -343,6 +345,8 @@ export class VolumeRenderer {
     this.resize();
     const loop = () => {
       this.frame = requestAnimationFrame(loop);
+      // damping and auto-rotate move the camera between input events
+      if (this.controls.enableDamping || this.controls.autoRotate) this.controls.update();
       if (this.dirty) this.render();
     };
     loop();
@@ -350,8 +354,11 @@ export class VolumeRenderer {
 
   private makeControls(): OrbitControls {
     const c = new OrbitControls(this.camera, this.renderer.domElement);
-    c.enableDamping = false;
+    c.enableDamping = true;
+    c.dampingFactor = 0.18;
     c.zoomSpeed = 1.2;
+    c.autoRotate = this.autoRotate;
+    c.autoRotateSpeed = 1.5;
     c.minDistance = 1e-4; // 0.1 fm: lets the user reach the nuclear scale
     c.maxDistance = 1e8; // 100 µm
     c.minZoom = 1e-6;
@@ -419,12 +426,66 @@ export class VolumeRenderer {
 
   resetView() {
     const half = this.field ? (this.field.shape[0] - 1) * this.field.spacingPm * 0.5 : 300;
+    this.setUp(new THREE.Vector3(0, 1, 0));
     this.controls.target.set(0, 0, 0);
     this.persp.position.set(1.1, 0.8, 1.5).multiplyScalar(half * 1.4);
     this.ortho.position.copy(this.persp.position);
     this.ortho.zoom = 1;
     this.updateOrthoFrustum();
     this.controls.update();
+    this.dirty = true;
+  }
+
+  /** Turn the camera about the orbit target so it looks along `dir` (e.g. "+x" looks from +x toward the target). */
+  viewAlong(dir: "+x" | "-x" | "+y" | "-y" | "+z" | "-z") {
+    const target = this.controls.target;
+    const cam = this.camera === this.ortho ? this.ortho : this.persp;
+    const d = cam.position.distanceTo(target) || 500;
+    const axis = new THREE.Vector3().setComponent("xyz".indexOf(dir[1]), dir[0] === "-" ? -1 : 1);
+    // +y stays up (the default) except when looking along y, where +z is up
+    this.setUp(dir[1] === "y" ? new THREE.Vector3(0, 0, dir[0] === "-" ? 1 : -1) : new THREE.Vector3(0, 1, 0));
+    for (const c of [this.persp, this.ortho]) {
+      c.position.copy(target).addScaledVector(axis, d);
+      c.lookAt(target);
+    }
+    this.controls.update();
+    this.dirty = true;
+  }
+
+  /** OrbitControls caches the up vector at construction, so rebuild it when up changes. */
+  private setUp(up: THREE.Vector3) {
+    const target = this.controls.target.clone();
+    this.persp.up.copy(up);
+    this.ortho.up.copy(up);
+    this.controls.dispose();
+    this.controls = this.makeControls();
+    this.controls.target.copy(target);
+  }
+
+  /** Zoom toward the orbit target; factor > 1 zooms in. */
+  zoomBy(factor: number) {
+    if (this.camera === this.ortho) {
+      this.ortho.zoom = Math.min(this.controls.maxZoom, Math.max(this.controls.minZoom, this.ortho.zoom * factor));
+      this.ortho.updateProjectionMatrix();
+    } else {
+      const t = this.controls.target;
+      const off = this.persp.position.clone().sub(t).divideScalar(factor);
+      const len = Math.min(this.controls.maxDistance, Math.max(this.controls.minDistance, off.length()));
+      this.persp.position.copy(t).addScaledVector(off.normalize(), len);
+    }
+    this.controls.update();
+    this.dirty = true;
+  }
+
+  /** Re-frame the last region passed to frameView(), or reset the view if there is none. */
+  fit() {
+    if (this.lastFrame) this.frameView(this.lastFrame.centre, this.lastFrame.radius);
+    else this.resetView();
+  }
+
+  setAutoRotate(on: boolean) {
+    this.autoRotate = on;
+    this.controls.autoRotate = on;
     this.dirty = true;
   }
 
@@ -554,6 +615,7 @@ export class VolumeRenderer {
 
   /** Centre the view on a point (pm) at a distance that shows `radiusPm`. */
   frameView(centrePm: THREE.Vector3, radiusPm: number) {
+    this.lastFrame = { centre: centrePm.clone(), radius: radiusPm };
     const dir = this.persp.position.clone().sub(this.controls.target).normalize();
     if (dir.lengthSq() === 0) dir.set(0.4, 0.3, 1).normalize();
     const d = radiusPm / Math.sin(THREE.MathUtils.degToRad(this.persp.fov / 2)) + radiusPm * 0.2;
