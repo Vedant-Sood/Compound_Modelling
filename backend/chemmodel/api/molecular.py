@@ -8,15 +8,18 @@ import numpy as np
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from chemmodel.jobs.manager import manager
+from chemmodel.api.calc import submit_job
 from chemmodel.molecular import structure as S
 from chemmodel.molecular.optimize import force_field_optimise
 
 router = APIRouter(prefix="/api/molecule", tags=["molecular"])
 
+# 3D embedding runs inside the request, so keep SMILES input to molecule-sized strings.
+MAX_SMILES_LENGTH = 1000
+
 
 class AtomIn(BaseModel):
-    symbol: str
+    symbol: str = Field(..., max_length=3)
     xyz: tuple[float, float, float]
 
 
@@ -27,17 +30,17 @@ class BondIn(BaseModel):
 
 
 class MoleculeIn(BaseModel):
-    atoms: list[AtomIn] = Field(..., min_length=1, max_length=500)
-    bonds: list[BondIn] = []
-    charge: int = 0
+    atoms: list[AtomIn] = Field(..., min_length=1, max_length=S.MAX_ATOMS)
+    bonds: list[BondIn] = Field([], max_length=5000)
+    charge: int = Field(0, ge=-50, le=200)
     multiplicity: int = Field(1, ge=1, le=11)
 
 
 class QuantumIn(BaseModel):
     molecule: MoleculeIn
     method: Literal["HF", "DFT"] = "HF"
-    xc: str = "B3LYP"
-    basis: str = "6-31g*"
+    xc: str = Field("B3LYP", max_length=32)
+    basis: str = Field("6-31g*", max_length=32)
     unrestricted: bool | None = None
     grid_points: int = Field(64, ge=16, le=128)
     padding_bohr: float = Field(5.0, ge=2, le=12)
@@ -112,9 +115,13 @@ def add_hydrogens(m: MoleculeIn):
     return {"molecule": out.to_json(), "added": len(out.symbols) - len(mol.symbols)}
 
 
+class SmilesIn(BaseModel):
+    smiles: str = Field("", max_length=MAX_SMILES_LENGTH)
+
+
 @router.post("/from-smiles")
-def from_smiles(body: dict):
-    smiles = str(body.get("smiles", "")).strip()
+def from_smiles(body: SmilesIn):
+    smiles = body.smiles.strip()
     if not smiles:
         raise HTTPException(422, "enter a SMILES string")
     try:
@@ -182,10 +189,7 @@ def _submit(kind: str, body: QuantumIn):
     _quantum_preflight(_mol(body.molecule), body)
     params = body.model_dump()
     params["molecule"]["atoms"] = [{"symbol": a["symbol"], "xyz": list(a["xyz"])} for a in params["molecule"]["atoms"]]
-    try:
-        return manager.submit(kind, params).to_dict(include_result=False)
-    except (KeyError, ValueError) as exc:
-        raise HTTPException(422, str(exc)) from exc
+    return submit_job(kind, params)
 
 
 @router.post("/jobs/scf")
@@ -196,10 +200,7 @@ def submit_scf(body: QuantumIn):
     params["atoms"] = [[s, x] for s, x in mol.atoms]
     params["charge"] = mol.charge
     params["spin"] = mol.multiplicity - 1
-    try:
-        return manager.submit("scf", params).to_dict(include_result=False)
-    except (KeyError, ValueError) as exc:
-        raise HTTPException(422, str(exc)) from exc
+    return submit_job("scf", params)
 
 
 class XTBIn(BaseModel):
@@ -218,10 +219,7 @@ def submit_xtb(body: XTBIn):
     _mol(body.molecule)
     params = body.model_dump()
     params["molecule"]["atoms"] = [{"symbol": a["symbol"], "xyz": list(a["xyz"])} for a in params["molecule"]["atoms"]]
-    try:
-        return manager.submit("xtb", params).to_dict(include_result=False)
-    except (KeyError, ValueError) as exc:
-        raise HTTPException(422, str(exc)) from exc
+    return submit_job("xtb", params)
 
 
 @router.post("/jobs/geomopt")

@@ -190,13 +190,30 @@ const qs = (params: Record<string, string | number | undefined | null>) =>
       .map(([k, v]) => [k, String(v)]),
   ).toString();
 
+/** Job ids are 24-character hex digests. Ids can come from opened project files, so check them
+ * before they become part of a URL (an id like "../molecule/x" would reach another endpoint). */
+export const JOB_ID_RE = /^[0-9a-f]{24}$/;
+export function jobPath(id: string, suffix = ""): string {
+  if (!JOB_ID_RE.test(id)) throw new Error("invalid job id");
+  return `/api/jobs/${id}${suffix}`;
+}
+const seg = encodeURIComponent;
+/** Like request() but for /api/jobs/<id>...; an invalid id becomes a rejected promise. */
+function jobRequest<T>(id: string, suffix = "", init?: RequestInit): Promise<T> {
+  try {
+    return request<T>(jobPath(id, suffix), init);
+  } catch (e) {
+    return Promise.reject(e);
+  }
+}
+
 export const api = {
   health: () => request<{ status: string; version: string; engines: Record<string, string | null> }>("/api/health"),
   elements: () => request<{ elements: ElementSummary[] }>("/api/elements"),
   element: (symbol: string, charge: number, massNumber?: number | null) =>
-    request<ElementDetail>(`/api/elements/${symbol}?${qs({ charge, mass_number: massNumber })}`),
+    request<ElementDetail>(`/api/elements/${seg(symbol)}?${qs({ charge, mass_number: massNumber })}`),
   orbitalModels: (symbol: string, charge: number) =>
-    request<{ models: OrbitalModel[]; electrons: number }>(`/api/atoms/${symbol}/orbital-models?${qs({ charge })}`),
+    request<{ models: OrbitalModel[]; electrons: number }>(`/api/atoms/${seg(symbol)}/orbital-models?${qs({ charge })}`),
   hydrogenic: (p: {
     n: number;
     l: number;
@@ -221,11 +238,11 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     }),
-  job: (id: string) => request<Job>(`/api/jobs/${id}`),
-  cancelJob: (id: string) => request<Job>(`/api/jobs/${id}`, { method: "DELETE" }),
+  job: (id: string) => jobRequest<Job>(id),
+  cancelJob: (id: string) => jobRequest<Job>(id, "", { method: "DELETE" }),
   jobOrbital: (id: string, spin: string, index: number) =>
-    request<VolumeResponse>(`/api/jobs/${id}/orbital?${qs({ spin, index })}`),
-  jobESP: (id: string) => request<VolumeResponse>(`/api/jobs/${id}/esp`),
+    jobRequest<VolumeResponse>(id, `/orbital?${qs({ spin, index })}`),
+  jobESP: (id: string) => jobRequest<VolumeResponse>(id, "/esp"),
 };
 
 export function decodeArray(a: EncodedArray): Float32Array {

@@ -12,6 +12,7 @@ import hashlib
 import json
 import multiprocessing as mp
 import os
+import re
 import threading
 import time
 import traceback
@@ -24,6 +25,12 @@ CACHE_DIR = Path(os.environ.get("CHEMMODEL_CACHE", Path.home() / ".chemmodel" / 
 
 # Bump when a task's result schema or numerics change, so stale cached results are not reused.
 CACHE_SCHEMA = 2
+
+# Calculations run in separate processes; cap how many run at once so a burst of submissions
+# cannot exhaust memory or CPU. Override with CHEMMODEL_MAX_JOBS.
+MAX_RUNNING_JOBS = max(1, int(os.environ.get("CHEMMODEL_MAX_JOBS", "4")))
+
+JOB_ID_RE = re.compile(r"^[0-9a-f]{24}$")
 
 TaskFn = Callable[[dict, Callable[[str], None], Path], dict]
 
@@ -39,7 +46,19 @@ def job_key(kind: str, params: dict) -> str:
     return hashlib.sha256(blob.encode()).hexdigest()[:24]
 
 
+class TooManyJobs(RuntimeError):
+    """Raised when MAX_RUNNING_JOBS calculations are already running."""
+
+
+def valid_job_id(job_id: str) -> bool:
+    return isinstance(job_id, str) and JOB_ID_RE.fullmatch(job_id) is not None
+
+
 def job_dir(job_id: str) -> Path:
+    # Job ids are hex digests (see job_key). Anything else must never become a path
+    # component, otherwise "../x" style ids could point outside the cache.
+    if not valid_job_id(job_id):
+        raise KeyError(job_id)
     return CACHE_DIR / job_id
 
 
@@ -106,18 +125,29 @@ class JobManager:
             if existing and existing.state in ("queued", "running", "done"):
                 return existing
             job = Job(job_id, kind, params)
+            workdir = job_dir(job_id)
+            if (workdir / "result.json").exists():
+                job.state, job.cached, job.finished = "done", True, time.time()
+                job.add_log("Loaded cached result (identical settings were run before).")
+                self._jobs[job_id] = job
+                return job
+            running = sum(1 for j in self._jobs.values() if j.state in ("queued", "running"))
+            if running >= MAX_RUNNING_JOBS:
+                raise TooManyJobs(
+                    f"{running} calculations are already running (limit {MAX_RUNNING_JOBS}); "
+                    "wait for one to finish or cancel it"
+                )
+            job.state = "running"  # counted against the limit before the lock is released
             self._jobs[job_id] = job
-        workdir = job_dir(job_id)
-        if (workdir / "result.json").exists():
-            job.state, job.cached, job.finished = "done", True, time.time()
-            job.add_log("Loaded cached result (identical settings were run before).")
-            return job
         workdir.mkdir(parents=True, exist_ok=True)
         (workdir / "params.json").write_text(json.dumps({"kind": kind, "params": params}))
         queue = self._ctx.Queue()
         job.process = self._ctx.Process(target=_worker, args=(kind, params, str(workdir), queue), daemon=True)
-        job.state = "running"
-        job.process.start()
+        try:
+            job.process.start()
+        except Exception as exc:
+            job.state, job.error, job.finished = "error", f"could not start calculation: {exc}", time.time()
+            raise
         threading.Thread(target=self._drain, args=(job, queue), daemon=True).start()
         return job
 
@@ -143,6 +173,8 @@ class JobManager:
                 return
 
     def get(self, job_id: str) -> Job:
+        if not valid_job_id(job_id):
+            raise KeyError(job_id)
         with self._lock:
             job = self._jobs.get(job_id)
         if job is None:

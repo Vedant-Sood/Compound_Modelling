@@ -2,22 +2,32 @@
 
 from __future__ import annotations
 
+from typing import Annotated
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from chemmodel.crystal import analysis as A
 from chemmodel.crystal import defects as D
 from chemmodel.crystal import symmetry as Y
-from chemmodel.crystal.structures import REFERENCE_STRUCTURES, Structure, build_reference, from_cellpar
+from chemmodel.crystal.structures import MAX_ATOMS, REFERENCE_STRUCTURES, Structure, build_reference, from_cellpar
+
+# User-defined bases are expanded by up to 192 symmetry operations, so keep them small.
+MAX_BASIS_SITES = 100
 
 router = APIRouter(prefix="/api/crystal", tags=["crystal"])
 
 
+Vec3 = Annotated[list[float], Field(min_length=3, max_length=3)]
+Symbol = Annotated[str, Field(max_length=3)]
+Repeats = tuple[Annotated[int, Field(ge=1, le=MAX_ATOMS)], Annotated[int, Field(ge=1, le=MAX_ATOMS)], Annotated[int, Field(ge=1, le=MAX_ATOMS)]]
+
+
 class StructureIn(BaseModel):
-    cell: list[list[float]]
-    species: list[str] = Field(..., min_length=1, max_length=20000)
-    frac_coords: list[list[float]]
-    pbc: list[bool] = [True, True, True]
+    cell: list[Vec3] = Field(..., min_length=3, max_length=3)
+    species: list[Symbol] = Field(..., min_length=1, max_length=MAX_ATOMS)
+    frac_coords: list[Vec3] = Field(..., min_length=1, max_length=MAX_ATOMS)
+    pbc: list[bool] = Field([True, True, True], min_length=3, max_length=3)
 
 
 def _s(m: StructureIn) -> Structure:
@@ -59,10 +69,10 @@ def examples():
 
 
 class BuildIn(BaseModel):
-    name: str | None = None  # reference structure
-    cellpar: list[float] | None = None  # a, b, c Å, α, β, γ °
-    species: list[str] | None = None
-    frac_coords: list[list[float]] | None = None
+    name: str | None = Field(None, max_length=100)  # reference structure
+    cellpar: list[float] | None = Field(None, min_length=6, max_length=6)  # a, b, c Å, α, β, γ °
+    species: list[Symbol] | None = Field(None, max_length=MAX_BASIS_SITES)
+    frac_coords: list[Vec3] | None = Field(None, max_length=MAX_BASIS_SITES)
     spacegroup: int | None = Field(None, ge=1, le=230)
 
 
@@ -114,7 +124,7 @@ def standardise(body: CellIn):
 
 class SupercellIn(BaseModel):
     structure: StructureIn
-    repeats: tuple[int, int, int] = (2, 2, 2)
+    repeats: Repeats = (2, 2, 2)
 
 
 @router.post("/supercell")
@@ -128,7 +138,7 @@ def supercell(body: SupercellIn):
 
 class DisplayIn(BaseModel):
     structure: StructureIn
-    repeats: tuple[int, int, int] = (1, 1, 1)
+    repeats: Repeats = (1, 1, 1)
     boundary: bool = True
     tolerance: float = Field(0.1, ge=0, le=0.5)
 
@@ -165,7 +175,7 @@ def site(body: SiteIn):
 
 class PlaneIn(BaseModel):
     structure: StructureIn
-    hkl: tuple[int, int, int]
+    hkl: tuple[Annotated[int, Field(ge=-100, le=100)], Annotated[int, Field(ge=-100, le=100)], Annotated[int, Field(ge=-100, le=100)]]
 
 
 @router.post("/plane")
@@ -180,8 +190,8 @@ class DefectIn(BaseModel):
     structure: StructureIn
     kind: str = Field(..., pattern="^(vacancy|substitution|interstitial)$")
     index: int | None = None
-    species: str | None = None
-    frac: list[float] | None = None
+    species: Symbol | None = None
+    frac: Vec3 | None = None
 
 
 @router.post("/defect")

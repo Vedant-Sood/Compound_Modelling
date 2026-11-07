@@ -235,7 +235,7 @@ def hydrogenic_orbital(
     mass_number: int | None = None,
     basis: Literal["real", "complex"] = "real",
     points: int = Query(64, ge=16, le=128),
-    fractions: str = "0.5,0.9,0.95,0.99",
+    fractions: str = Query("0.5,0.9,0.95,0.99", max_length=200),
 ):
     """Wavefunction psi_nlm on a cube that encloses 99.9 % of the probability.
 
@@ -252,7 +252,13 @@ def hydrogenic_orbital(
     density = np.abs(psi) ** 2
     grid_prob = float(density.sum() * dv)
     thresholds = {}
-    for f in (float(x) for x in fractions.split(",") if x):
+    try:
+        wanted = [float(x) for x in fractions.split(",") if x.strip()]
+    except ValueError as exc:
+        raise HTTPException(422, "fractions must be comma-separated numbers between 0 and 1") from exc
+    if len(wanted) > 10:
+        raise HTTPException(422, "at most 10 enclosed-probability fractions")
+    for f in wanted:
         if 0 < f < 1:
             thresholds[f"{f:g}"] = enclosed_probability_threshold(density, dv, f)
     volumes = {"density": encode_volume(density)}

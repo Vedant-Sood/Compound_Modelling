@@ -41,11 +41,10 @@ class Structure:
             raise ValueError(f"unknown element symbol(s): {', '.join(unknown)}")
         if not (np.isfinite(cell).all() and np.isfinite(frac).all()):
             raise ValueError("cell and coordinates must be finite")
-        vol = abs(np.linalg.det(cell))
-        if vol < 1.0:
-            raise ValueError(f"cell volume {vol:.3g} Å³ is degenerate")
         pbc = tuple(bool(x) for x in d.get("pbc", (True, True, True)))
-        return cls(cell, species, frac, pbc)  # type: ignore[arg-type]
+        if len(pbc) != 3:
+            raise ValueError("pbc must have three entries")
+        return validate(cls(cell, species, frac, pbc))  # type: ignore[arg-type]
 
     def to_json(self) -> dict:
         return {
@@ -62,16 +61,52 @@ class Structure:
 
     @classmethod
     def from_ase(cls, atoms) -> "Structure":
-        return cls(
+        return validate(cls(
             np.array(atoms.cell[:]),
             list(atoms.get_chemical_symbols()),
             np.array(atoms.get_scaled_positions(wrap=True)),
             tuple(bool(x) for x in atoms.pbc),  # type: ignore[arg-type]
-        )
+        ))
 
     @property
     def cartesian(self) -> np.ndarray:
         return self.frac @ self.cell
+
+
+# Limits that keep periodic analysis (neighbour lists within NEIGHBOUR_CUTOFF) bounded in time
+# and memory. Real solids have at most ~0.2 atoms/Å³ and lattice-plane spacings well above 0.5 Å.
+MAX_ATOMS = 20000
+MIN_CELL_HEIGHT_ANGSTROM = 0.5
+MAX_NEIGHBOUR_PAIRS = 4_000_000
+NEIGHBOUR_CUTOFF = 6.0
+
+
+def validate(s: Structure) -> Structure:
+    """Reject structures whose periodic neighbour search would blow up.
+
+    A cell can have a reasonable volume yet be almost flat (two nearly parallel lattice
+    vectors); the neighbour search then has to visit an enormous number of periodic
+    images. Very dense cells produce an enormous neighbour list."""
+    n = len(s.species)
+    if n > MAX_ATOMS:
+        raise ValueError(f"structure has {n} atoms (limit {MAX_ATOMS})")
+    vol = abs(float(np.linalg.det(s.cell)))
+    if vol < 1.0:
+        raise ValueError(f"cell volume {vol:.3g} Å³ is degenerate")
+    a, b, c = s.cell
+    heights = [vol / np.linalg.norm(np.cross(u, v)) for u, v in ((b, c), (c, a), (a, b))]
+    if min(heights) < MIN_CELL_HEIGHT_ANGSTROM:
+        raise ValueError(
+            f"cell is nearly flat: lattice-plane spacing {min(heights):.3g} Å "
+            f"(minimum {MIN_CELL_HEIGHT_ANGSTROM} Å)"
+        )
+    pairs = n * n / vol * (4 / 3) * np.pi * NEIGHBOUR_CUTOFF**3
+    if pairs > MAX_NEIGHBOUR_PAIRS:
+        raise ValueError(
+            f"structure is too dense to analyse ({n / vol:.3g} atoms/Å³ with {n} atoms); "
+            "check the lattice parameters"
+        )
+    return s
 
 
 # Experimental lattice parameters (room temperature unless stated).
@@ -190,6 +225,10 @@ def from_cellpar(cellpar: list[float], species: list[str], frac: list[list[float
     if min(a, b, c) <= 0 or not all(0 < x < 180 for x in (al, be, ga)):
         raise ValueError("lengths must be positive and angles between 0 and 180°")
     if spacegroup:
+        if len(species) != len(frac):
+            raise ValueError("species and frac_coords must be the same length")
+        # Check the cell before ASE expands the basis by up to 192 symmetry operations.
+        validate(Structure(cellpar_to_cell(cellpar), list(species), np.zeros((len(species), 3))))
         atoms = crystal(species, basis=frac, spacegroup=int(spacegroup), cellpar=cellpar)
         return Structure.from_ase(atoms)
     return Structure.from_json({"cell": cellpar_to_cell(cellpar).tolist(), "species": species, "frac_coords": frac})
