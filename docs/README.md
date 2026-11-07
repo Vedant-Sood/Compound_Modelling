@@ -5,6 +5,7 @@
 | Task | Guide |
 | --- | --- |
 | Install and start the workstation | [Getting started](GETTING_STARTED.md) |
+| Build or run the desktop app | [Desktop app](DESKTOP.md) |
 | Understand the backend, frontend and API | [Architecture](ARCHITECTURE.md) |
 | Interpret orbitals, methods and units | [Methodology](METHODOLOGY.md) |
 | Understand approximations and unavailable features | [Limitations](LIMITATIONS.md) |

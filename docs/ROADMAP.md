@@ -8,6 +8,6 @@
 | 3 Data I/O + databases | XYZ/CIF/PDB/MOL/SDF/POSCAR/CUBE import-export, Materials Project, PubChem, OPTIMADE with offline cache | open (workstream C) |
 | 4 Alloys and compound discovery | composition tools, SQS, phase/convex-hull analysis | after B and C |
 | 5 Advanced simulation | MD (ASE), parameter sweeps, property calculations | later |
-| 6 Optimisation and packaging | CI, installer, performance | open (workstream D) |
+| 6 Optimisation and packaging | CI, installer, performance | desktop app (Electron, AppImage/deb/NSIS) done, see DESKTOP.md; CI and signing open |
 
 Work split and ownership: [HANDOFF.md](HANDOFF.md).

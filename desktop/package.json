@@ -1,0 +1,25 @@
+{
+  "name": "chemical-modelling-desktop",
+  "productName": "Chemical Modelling",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Desktop shell for the Chemical Modelling workstation",
+  "author": "Vedant Sood",
+  "license": "UNLICENSED",
+  "homepage": "https://github.com/Vedant-Sood/Compound_Modelling",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test test/*.test.js",
+    "check": "node --check src/main.js && node --check src/backend.js && node --check src/window-state.js && node --check src/splash.js && node --check src/splash-preload.js",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder",
+    "dist:linux": "electron-builder --linux AppImage deb",
+    "dist:win": "electron-builder --win nsis",
+    "dist:mac": "electron-builder --mac dmg"
+  },
+  "devDependencies": {
+    "electron": "45.2.3",
+    "electron-builder": "26.18.1"
+  }
+}

@@ -1,0 +1,49 @@
+# Packaging config: https://www.electron.build/configuration
+appId: io.github.vedantsood.chemicalmodelling
+productName: Chemical Modelling
+artifactName: "ChemicalModelling-${version}-${os}-${arch}.${ext}"
+directories:
+  output: dist
+  buildResources: build
+files:
+  - src/**
+  - build/icon.png
+  - package.json
+# The UI and the Python backend sources ship as plain resources next to the app.
+# The backend's Python environment is created on first launch (see backend/run-backend.sh).
+extraResources:
+  - from: ../frontend/dist
+    to: frontend
+  - from: ../backend
+    to: backend
+    filter:
+      - chemmodel/**
+      - requirements.txt
+      - pyproject.toml
+      - "!**/__pycache__/**"
+      - "!**/*.pyc"
+  - from: backend/run-backend.sh
+    to: run-backend.sh
+linux:
+  target: [AppImage, deb]
+  category: Science
+  icon: build/icon.png
+  synopsis: Computational chemistry workstation
+  maintainer: Vedant Sood
+deb:
+  depends: [python3, python3-venv]
+win:
+  target: [nsis]
+  icon: build/icon.ico
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  shortcutName: Chemical Modelling
+mac:
+  target: [dmg]
+  category: public.app-category.education
+  icon: build/icon.png
+# No auto-update feed is configured; builds are distributed manually.
+publish: null
