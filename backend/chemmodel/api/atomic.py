@@ -38,7 +38,14 @@ def _element_or_404(symbol: str) -> dict:
     try:
         return E.get_element(symbol)
     except KeyError as exc:
-        raise HTTPException(404, str(exc)) from exc
+        raise HTTPException(404, str(exc.args[0]) if exc.args else "unknown element") from exc
+
+
+def _check_charge(z: int, charge: int) -> None:
+    if charge > z:
+        raise HTTPException(422, f"charge +{charge} exceeds Z={z}")
+    if charge < -3:
+        raise HTTPException(422, "anions beyond -3 are not supported")
 
 
 def _default_isotope(el: dict) -> dict | None:
@@ -80,10 +87,7 @@ def list_elements():
 def element_detail(symbol: str, charge: int = 0, mass_number: int | None = None):
     el = _element_or_404(symbol)
     z = el["Z"]
-    if charge > z:
-        raise HTTPException(422, f"charge +{charge} exceeds Z={z}")
-    if charge < -3:
-        raise HTTPException(422, "anions beyond -3 are not supported")
+    _check_charge(z, charge)
     iso = _isotope(el, mass_number)
     shells, cfg_prov = E.ion_configuration(el["symbol"], charge)
     pmg = "pymatgen"
@@ -180,6 +184,7 @@ def orbital_models(symbol: str, charge: int = 0):
     """Which orbital models are scientifically appropriate for this species."""
     el = _element_or_404(symbol)
     z, n_el = el["Z"], el["Z"] - charge
+    _check_charge(z, charge)
     shells, _ = E.ion_configuration(el["symbol"], charge)
     models = []
     if n_el == 1:

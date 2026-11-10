@@ -46,7 +46,7 @@ runtime deps.
 | `backend/chemmodel/atomic/`, `quantum/`, `jobs/manager.py`, `api/atomic.py`, `api/calc.py` | Primary (A) |
 | `frontend/src/components/AtomicExplorer.tsx`, `render/VolumeRenderer.ts`, `state/atomic.ts` | Primary (A) |
 | New `molecular/` modules, Molecular workspace | Primary (A) |
-| New `crystal/` modules, Crystal workspace | **Second agent (B)** |
+| `crystal/` modules, Crystal workspace (`components/crystal/`, `render/CellOverlay.ts`) | Primary (A), done 2026-10-28 |
 | New `io/` and `databases/` modules | **Second agent (C)** |
 | CI, packaging (`.github/`, `scripts/`) | **Second agent (D)** |
 | `App.tsx`, `api/main.py`, `jobs/tasks.py`, `api/client.ts`, `styles.css`, docs index files | Shared: append-only, see section 4 |
@@ -70,11 +70,13 @@ To plug a new workspace in, the only edits allowed to shared files are:
 
 ## 5. Workstreams for the second agent
 
-Take them in order B → C → D, or in parallel if more agents are available.
+**Update 2026-10-28: workstream B is done by the primary agent (on `main` once its PR merges).
+The second agent should skip B and start with C, then D.** B's description is kept below for
+reference; the implementation follows it, with the API under `/api/crystal/*`.
 
-### Workstream B — Crystal Explorer (spec section 5 Mode D, Phase 3)
+### Workstream B — Crystal Explorer (spec section 5 Mode D, Phase 3) — DONE (primary agent)
 
-Branch: `agent2/crystal-explorer`
+Branch: (built by the primary agent; do not start `agent2/crystal-explorer`)
 
 Backend (new package `backend/chemmodel/crystal/`):
 - `structures.py`: build example crystals with ASE (`ase.build.bulk`, `ase.lattice`, `ase.spacegroup.crystal`)
@@ -114,6 +116,10 @@ Acceptance tests (backend):
 Branch: `agent2/io-databases`
 
 Backend (new packages `backend/chemmodel/io/` and `backend/chemmodel/databases/`):
+- Periodic structures must use `chemmodel.crystal.structures.Structure` (`from_ase`, `to_json`)
+  so imported CIF/POSCAR files open directly in the Crystal Explorer via `/api/crystal/analyse`.
+  The Crystal workspace has an Open button for its own JSON; add CIF/POSCAR import there by
+  calling your endpoint, or tell the primary agent the endpoint name in your PR.
 - `io/formats.py`: read/write XYZ, CIF, PDB, POSCAR/CONTCAR via ASE; MOL/SDF via RDKit; Gaussian
   CUBE read/write (volumes + atoms; match the layout used by `frontend/src/science/cube.ts`);
   JSON (the structure schema in workstream B). Endpoints `/api/io/import` (multipart upload) and
@@ -160,6 +166,9 @@ group (opaque geometry composited with volumes via a depth pre-pass), `pick()`,
 adding its own layer to `renderer.solids` (see `render/StructureLayer.ts`) instead of writing a
 new renderer.
 
+
+Done since: xTB balanced mode (PR #3), dev-tool audit fix (PR #4), bug audit and the Crystal
+Explorer (workstream B). Next for A: Atomic Explorer polish, then Phase 4 planning once C lands.
 
 Workstream A, branch `claude/...`:
 1. Molecular Builder (Phase 2): place/remove atoms, bonds and bond orders (RDKit), measurement,

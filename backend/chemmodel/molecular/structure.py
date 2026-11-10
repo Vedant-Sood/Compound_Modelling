@@ -18,6 +18,8 @@ from dataclasses import dataclass, field
 import numpy as np
 
 BOND_TYPES = {1: "SINGLE", 2: "DOUBLE", 3: "TRIPLE", 1.5: "AROMATIC"}
+# Closer than this, two nuclei are certainly a drawing mistake (shortest real bond, H2, is 0.74 Å).
+MIN_SEPARATION_ANGSTROM = 0.3
 
 
 @dataclass
@@ -33,8 +35,23 @@ class Molecule:
         atoms = d.get("atoms") or []
         if not atoms:
             raise ValueError("molecule has no atoms")
-        symbols = [str(a["symbol"]).capitalize() for a in atoms]
+        from ase.data import atomic_numbers
+
+        symbols = [str(a["symbol"]).strip().capitalize() for a in atoms]
+        unknown = sorted({s for s in symbols if atomic_numbers.get(s, 0) == 0})
+        if unknown:
+            raise ValueError(f"unknown element symbol(s): {', '.join(unknown)}")
         coords = np.array([a["xyz"] for a in atoms], dtype=float).reshape(-1, 3)
+        if not np.isfinite(coords).all():
+            raise ValueError("atom coordinates must be finite numbers")
+        if len(coords) > 1:
+            dist = np.linalg.norm(coords[:, None, :] - coords[None, :, :], axis=-1)
+            i, j = np.unravel_index(np.argmin(dist + np.eye(len(coords)) * 1e9), dist.shape)
+            if dist[i, j] < MIN_SEPARATION_ANGSTROM:
+                raise ValueError(
+                    f"atoms {min(i, j)} and {max(i, j)} are only {dist[i, j]:.3f} Å apart "
+                    f"(minimum {MIN_SEPARATION_ANGSTROM} Å); move or delete one of them"
+                )
         bonds = []
         for b in d.get("bonds") or []:
             i, j, order = int(b["i"]), int(b["j"]), float(b.get("order", 1))
@@ -105,8 +122,12 @@ def to_rdkit(mol: Molecule, perceive_bonds: bool = False):
     m = rw.GetMol()
     if len(mol.symbols) == 1:
         m.GetAtomWithIdx(0).SetFormalCharge(mol.charge)
+        m.UpdatePropertyCache(strict=False)
         return m
-    rdDetermineBonds.DetermineBonds(m, charge=mol.charge)
+    try:
+        rdDetermineBonds.DetermineBonds(m, charge=mol.charge)
+    except Exception as exc:  # RDKit raises several exception types here
+        raise ValueError(f"bond perception from geometry failed: {exc}".split("\n")[0]) from exc
     return m
 
 
@@ -161,7 +182,32 @@ def from_smiles(smiles: str, seed: int = 42) -> tuple[Molecule, dict]:
         AllChem.UFFOptimizeMolecule(m, maxIters=2000)
         info["force_field"] = "UFF"
         info["geometry_method"] += " + UFF minimisation"
+    if _separate_fragments(m):
+        info["geometry_method"] += "; disconnected fragments placed 3 Å apart (arbitrary arrangement)"
     return from_rdkit(m), info
+
+
+def _separate_fragments(m, gap: float = 3.0) -> bool:
+    """ETKDG embeds each disconnected fragment (e.g. the ions of a salt) around the
+    origin, so they overlap. Lay them out along x with `gap` Å between their extents."""
+    from rdkit import Chem
+    from rdkit.Geometry import Point3D
+
+    frags = Chem.GetMolFrags(m)
+    if len(frags) < 2:
+        return False
+    conf = m.GetConformer()
+    pos = np.array(conf.GetPositions())
+    x_edge = None
+    for frag in frags:
+        p = pos[list(frag)]
+        p = p - p.mean(axis=0)
+        shift = 0.0 if x_edge is None else x_edge + gap - p[:, 0].min()
+        p[:, 0] += shift
+        for k, idx in enumerate(frag):
+            conf.SetAtomPosition(idx, Point3D(*map(float, p[k])))
+        x_edge = p[:, 0].max()
+    return True
 
 
 def perceive(mol: Molecule) -> dict:
@@ -169,8 +215,14 @@ def perceive(mol: Molecule) -> dict:
     from rdkit import Chem
     from rdkit.Chem import Descriptors, rdMolDescriptors
 
-    m = to_rdkit(mol)
     problems = []
+    try:
+        m = to_rdkit(mol)
+    except ValueError as exc:
+        # e.g. separated ions or unusual valences: fall back to atoms only
+        problems.append(str(exc))
+        m = _atoms_only(mol)
+    m.UpdatePropertyCache(strict=False)
     try:
         Chem.SanitizeMol(Chem.Mol(m))
     except Exception as exc:  # RDKit raises several exception types for valence errors
@@ -193,6 +245,17 @@ def perceive(mol: Molecule) -> dict:
         "radical_electrons_lewis": radicals,
         "problems": problems,
     }
+
+
+def _atoms_only(mol: Molecule):
+    from rdkit import Chem
+
+    rw = Chem.RWMol()
+    for s in mol.symbols:
+        a = Chem.Atom(s)
+        a.SetNoImplicit(True)
+        rw.AddAtom(a)
+    return rw.GetMol()
 
 
 # ---- measurements ---------------------------------------------------------

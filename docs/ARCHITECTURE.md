@@ -14,6 +14,13 @@ backend/chemmodel/
     structure.py         Molecule model, RDKit perception, SMILES -> 3D, measurements
     optimize.py          MMFF/UFF, PySCF+ASE BFGS optimisation, bond scans
     tasks.py             job kinds geomopt and scan
+    xtb.py               GFN-xTB balanced mode via optional tblite
+  crystal/
+    structures.py        periodic Structure (JSON schema), 14 reference crystals with sources
+    symmetry.py          spglib space group, Wyckoff sites, primitive/conventional cells
+    analysis.py          supercells, PBC neighbours + coordination, density, Miller planes,
+                         display geometry (boundary images, first-shell bonds)
+    defects.py           vacancy, substitution, interstitial (hypothetical)
   jobs/
     manager.py           one process per job, cancel = terminate, disk cache by params hash
     tasks.py             job kinds (TASKS dict) + checkpoint post-processing
@@ -22,6 +29,8 @@ backend/chemmodel/
     atomic.py            /api/elements, /api/hydrogenic/*, /api/atoms/*
     calc.py              /api/jobs/*, /api/calc/options
     molecular.py         /api/molecule/* (examples, smiles, analyze, hydrogens, force field, jobs)
+    crystal.py           /api/crystal/* (examples, build, analyse, standardise, supercell,
+                         display, site, plane, defect)
 backend/scripts/build_element_data.py
 backend/tests/           pytest scientific validation
 
@@ -30,9 +39,11 @@ frontend/src/
   render/VolumeRenderer.ts  Three.js ray-marching volume/isosurface renderer (scene unit = pm);
                          opaque `solids` group drawn in a depth pre-pass so rays stop at atoms
   render/StructureLayer.ts  instanced ball-and-stick atoms and bonds
+  render/CellOverlay.ts  unit-cell wireframe and Miller-plane overlay
   science/               units + scale bar, enclosed-probability threshold, CUBE writer
   state/atomic.ts        Atomic Explorer state, undo/redo, autosave
-  components/            AtomicExplorer, MolecularBuilder (workspaces), PeriodicTable, ElementPanel,
+  science/crystal.ts     cell edges, Miller-plane polygons, basis parsing (unit tested)
+  components/            AtomicExplorer, MolecularBuilder, crystal/CrystalExplorer (workspaces), PeriodicTable, ElementPanel,
                          SliceView (cross-sections + measurement), LineChart, EnergyDiagram,
                          Splitter (resizable panels), useLog (console)
   App.tsx                top toolbar and workspace switching

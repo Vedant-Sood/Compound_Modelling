@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api, type ElementSummary } from "./api/client";
 import { AtomicExplorer } from "./components/AtomicExplorer";
 import { MolecularBuilder } from "./components/MolecularBuilder";
+import { CrystalExplorer } from "./components/crystal/CrystalExplorer";
 
 const MODES = [
   { id: "atomic", label: "Atomic", phase: 1 },
@@ -53,6 +54,8 @@ export function App() {
         elements.length > 0 && <AtomicExplorer elements={elements} />
       ) : mode === "molecular" ? (
         <MolecularBuilder />
+      ) : mode === "crystal" ? (
+        <CrystalExplorer />
       ) : (
         <div className="placeholder">
           <h2>{current.label} workspace</h2>

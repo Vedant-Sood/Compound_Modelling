@@ -12,6 +12,7 @@ export interface StructureStyle {
 
 const BOND_RADIUS_PM = 9;
 const SELECT_COLOUR = new THREE.Color("#f2a541");
+const HIGHLIGHT_COLOUR = new THREE.Color("#5ad1e6");
 
 export class StructureLayer {
   readonly group = new THREE.Group();
@@ -20,7 +21,7 @@ export class StructureLayer {
   private sphere = new THREE.SphereGeometry(1, 32, 16);
   private cylinder = new THREE.CylinderGeometry(1, 1, 1, 12, 1);
 
-  set(atoms: MolAtom[], bonds: MolBond[], style: StructureStyle, selected: number[] = []) {
+  set(atoms: MolAtom[], bonds: MolBond[], style: StructureStyle, selected: number[] = [], highlighted: number[] = []) {
     this.clear();
     if (!atoms.length) return;
     const m = new THREE.Matrix4();
@@ -30,7 +31,10 @@ export class StructureLayer {
       const r = (style.covalent[a.symbol] ?? 0.75) * 100 * style.radiusScale;
       m.compose(new THREE.Vector3(...a.xyz).multiplyScalar(100), new THREE.Quaternion(), new THREE.Vector3(r, r, r));
       am.setMatrixAt(k, m);
-      am.setColorAt(k, selected.includes(k) ? SELECT_COLOUR : new THREE.Color(style.colour[a.symbol] ?? "#ff1493"));
+      am.setColorAt(
+        k,
+        selected.includes(k) ? SELECT_COLOUR : highlighted.includes(k) ? HIGHLIGHT_COLOUR : new THREE.Color(style.colour[a.symbol] ?? "#ff1493"),
+      );
     });
     this.atomsMesh = am;
     this.group.add(am);

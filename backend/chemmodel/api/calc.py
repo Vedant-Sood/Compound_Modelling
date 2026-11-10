@@ -43,10 +43,34 @@ def calc_options():
     }
 
 
+def preflight_scf(atoms: list, params: dict) -> None:
+    """Reject impossible inputs before a job is queued (instead of failing inside it):
+    unknown basis/element combinations, zero electrons, impossible spin."""
+    from ase.data import atomic_numbers
+
+    from chemmodel.quantum import scf as Q
+
+    unknown = sorted({str(a[0]) for a in atoms if atomic_numbers.get(str(a[0]), 0) == 0})
+    if unknown:
+        raise HTTPException(422, f"unknown element symbol(s): {', '.join(unknown)}")
+    if not atoms:
+        raise HTTPException(422, "no atoms given")
+    try:
+        mol = Q.build_mol([(a[0], a[1]) for a in atoms], tasks._settings(params))
+    except (RuntimeError, ValueError, KeyError) as exc:
+        msg = str(exc).splitlines()[0] if str(exc) else type(exc).__name__
+        if "spin" in msg.lower() or "electron" in msg.lower():
+            msg = f"spin 2S = {params.get('spin')} is impossible for this electron count ({msg})"
+        raise HTTPException(422, msg) from exc
+    if mol.nelectron < 1:
+        raise HTTPException(422, "this species has no electrons, so there is nothing to calculate")
+
+
 @router.post("/jobs/scf")
 def submit_scf(req: SCFRequest):
     params = req.model_dump()
     params["atoms"] = [[s, list(x)] for s, x in req.atoms]
+    preflight_scf(params["atoms"], params)
     try:
         job = manager.submit("scf", params)
     except (KeyError, ValueError) as exc:
