@@ -1,9 +1,9 @@
 # Chemical Modelling
 
-A local-first computational chemistry and materials science workstation: quantum-mechanical
-electron clouds, molecules, crystals, alloys and compound discovery, built on established
-scientific libraries (PySCF, ASE, spglib, RDKit, pymatgen data) with a React + Three.js
-GPU-rendered interface.
+A local computational chemistry workstation for atomic electron clouds and molecular modelling,
+built on established scientific libraries (PySCF, ASE, spglib, RDKit, pymatgen data) with a
+React + Three.js GPU-rendered interface. Crystal, alloy and compound-discovery workspaces
+remain on the roadmap.
 
 **Status: Phase 1 (Atomic Explorer) and Phase 2 (Molecular Builder) are implemented and validated.** Later phases
 are tracked in [docs/ROADMAP.md](docs/ROADMAP.md). Work split for parallel agents is in
@@ -58,6 +58,9 @@ are tracked in [docs/ROADMAP.md](docs/ROADMAP.md). Work split for parallel agent
 
 ## Quick start
 
+Start with [installation and development](docs/GETTING_STARTED.md) for prerequisites,
+fresh backend setup and troubleshooting. Run the following commands from the repository root.
+
 ### Linux / WSL2
 
 ```bash
@@ -65,7 +68,7 @@ cd frontend && npm ci && npm run build && cd ..
 ./scripts/start-backend.sh        # serves API + UI at http://localhost:8000
 ```
 
-Development mode with hot reload: run `uvicorn chemmodel.api.main:app --reload` in `backend/`
+After installing and activating the backend environment, development mode with hot reload: run `uvicorn chemmodel.api.main:app --reload` in `backend/`
 and `npm run dev` in `frontend/` (http://localhost:5173, proxies `/api`).
 
 ### Windows 11
@@ -87,6 +90,8 @@ See [docs/VALIDATION.md](docs/VALIDATION.md) for what the tests compare against.
 
 ## Documentation
 
+- [Documentation index](docs/README.md) – choose a guide by task
+- [Getting started](docs/GETTING_STARTED.md) – fresh setup, development servers and checks
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) – modules, data flow, API
 - [docs/METHODOLOGY.md](docs/METHODOLOGY.md) – scientific methods and conventions
 - [docs/LIMITATIONS.md](docs/LIMITATIONS.md) – known limitations

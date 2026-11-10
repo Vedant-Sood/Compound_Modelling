@@ -21,6 +21,7 @@ import { Console, dataURLtoBlob } from "./common";
 import { EnergyDiagram, type Level } from "./EnergyDiagram";
 import { LineChart, download } from "./LineChart";
 import { Splitter } from "./Splitter";
+import { ViewportToolbar } from "./ViewportToolbar";
 import { useLog } from "./useLog";
 
 type Tool = "select" | "add" | "delete" | "bond";
@@ -91,7 +92,7 @@ export function toXYZ(m: MoleculeJSON, comment: string): string {
   return [String(m.atoms.length), comment, ...m.atoms.map((a) => `${a.symbol} ${a.xyz.map((x) => x.toFixed(6)).join(" ")}`)].join("\n") + "\n";
 }
 
-export function MolecularBuilder() {
+export function MolecularBuilder({ active = true }: { active?: boolean }) {
   const [hist, dispatch] = useReducer(histReducer, undefined, () => ({ past: [], present: loadStored(), future: [] }));
   const mol = hist.present;
   const setMol = useCallback((m: MoleculeJSON) => dispatch({ type: "set", mol: m }), []);
@@ -256,6 +257,7 @@ export function MolecularBuilder() {
 
   // keyboard
   useEffect(() => {
+    if (!active) return;
     const onKey = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement).tagName;
       if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") return;
@@ -266,7 +268,6 @@ export function MolecularBuilder() {
       else if (!mod && e.key === "a") setTool("add");
       else if (!mod && e.key === "d") setTool("delete");
       else if (!mod && e.key === "b") setTool("bond");
-      else if (!mod && e.key === "f") frame(mol);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -566,7 +567,7 @@ export function MolecularBuilder() {
           </label>
           <button onClick={() => rendererRef.current && download("molecule.png", dataURLtoBlob(rendererRef.current.exportPNG(3)))}>Image ×3</button>
         </div>
-        <div className="muted small">Shortcuts: S select · A add · D delete · B bond · F frame · Ctrl+Z/Y</div>
+        <div className="muted small">Shortcuts: S select · A add · D delete · B bond · F frame · Ctrl+Z/Y · ? for all</div>
       </aside>
 
       <Splitter variable="--left" direction={1} min={220} max={560} />
@@ -575,13 +576,19 @@ export function MolecularBuilder() {
 
       <main className="viewport-wrap" onPointerDown={(e) => (downAt.current = [e.clientX, e.clientY])} onClick={onPointer}>
         <div className="viewport" ref={viewportRef} />
+        <ViewportToolbar renderer={rendererRef} onFit={() => frame(mol)} imageName="molecule.png" active={active} />
+        {!mol.atoms.length && (
+          <div className="empty-state">
+            <div className="empty-title">Start a molecule</div>
+            <div className="muted">Pick an example or type a SMILES string under <b>Load</b>, or choose <b>Add atom</b> (A) and click here.</div>
+          </div>
+        )}
         <div className="overlay top-left">
           {scfResult && !stale && <div className="badge computed">Computed: {scfResult.solver}/{String(scfResult.settings.basis)}{scfResult.settings.method === "DFT" ? `/${scfResult.settings.xc}` : ""}</div>}
           {stale && <div className="badge approx">Structure edited since the last calculation: results hidden</div>}
           {field && <div className="field-title">{fieldTitle}</div>}
           {field && field.kind !== "density+esp" && mode === "isosurface" && <div className="small muted">Isosurface encloses {(fraction * 100).toFixed(0)} % of the {field.kind === "signed" ? "|spin density|" : "probability"} on the grid</div>}
           {measurement && <div className="field-title">{measurement}</div>}
-          {!mol.atoms.length && <div className="muted">Load an example or SMILES, or choose “Add atom” and click in the viewport.</div>}
         </div>
         <div className="overlay bottom-left">
           {scaleBar && (

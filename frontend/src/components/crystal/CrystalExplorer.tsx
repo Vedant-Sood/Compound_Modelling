@@ -13,13 +13,14 @@ import { niceScaleBar } from "../../science/units";
 import { Console, dataURLtoBlob } from "../common";
 import { download } from "../LineChart";
 import { Splitter } from "../Splitter";
+import { ViewportToolbar } from "../ViewportToolbar";
 import { useLog } from "../useLog";
 import "./crystal.css";
 
 const DEFAULT_EXAMPLE = "NaCl (rock salt)";
 const fmt = (x: number | null | undefined, d = 4) => (x === null || x === undefined ? "—" : x.toFixed(d));
 
-export function CrystalExplorer() {
+export function CrystalExplorer({ active = true }: { active?: boolean }) {
   const { log, entries, clear } = useLog();
   const [examples, setExamples] = useState<Record<string, ExampleInfo>>({});
   const [display, setDisplay] = useState<DisplayData | null>(null);
@@ -213,6 +214,20 @@ export function CrystalExplorer() {
     accept(prev, "Undo", false);
   };
 
+  useEffect(() => {
+    if (!active) return;
+    const onKey = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") return;
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z" && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+
   const saveJSON = () =>
     report &&
     download(
@@ -271,7 +286,7 @@ export function CrystalExplorer() {
           ))}
         </select>
         <div className="row">
-          <button onClick={undo} disabled={!past.length}>Undo</button>
+          <button onClick={undo} disabled={!past.length} title="Ctrl+Z">Undo</button>
           {busy && <span className="muted small">working…</span>}
         </div>
 
@@ -357,6 +372,7 @@ export function CrystalExplorer() {
 
       <main className="viewport-wrap" onPointerDown={(e) => (downAt.current = [e.clientX, e.clientY])} onClick={onClick}>
         <div className="viewport" ref={viewportRef} />
+        <ViewportToolbar renderer={rendererRef} imageName="crystal.png" active={active} />
         <div className="overlay top-left">
           {report && (
             <div className={`badge ${hypothetical ? "approx" : "exact"}`}>
