@@ -43,16 +43,27 @@ To build a desktop executable instead of using the browser, see [DESKTOP.md](DES
 
 ## Windows
 
-Install and configure WSL2 Ubuntu and its Python/venv tools, and install Node/npm
-on Windows for the launcher. From the repository root in PowerShell:
+The backend needs WSL2 (PySCF has no Windows wheels); the frontend is built on
+Windows with Node.js 20 or newer. One-time setup, in an administrator PowerShell:
+
+~~~powershell
+wsl --install -d Ubuntu      # reboot if asked, then open Ubuntu once to create a user
+~~~
+
+Then inside Ubuntu: `sudo apt update && sudo apt install -y python3 python3-venv python3-pip`.
+
+From the repository root in PowerShell:
 
 ~~~powershell
 ./scripts/start-windows.ps1
 ~~~
 
-The script builds the frontend, starts the backend inside WSL and opens
-http://localhost:8000. The browser can open before a first dependency install
-has finished; wait for the backend's startup message and reload.
+The script checks Node and WSL, reinstalls frontend packages when the lockfile changed,
+builds the frontend, starts the backend inside WSL in its own window and opens
+http://localhost:8000 once the backend answers. The first run installs the Python
+dependencies, which takes several minutes. Close the WSL window to stop the backend.
+If the build reports TypeScript errors after pulling, delete `frontend\node_modules`
+and run the script again.
 A native Windows Python environment is not the backend path documented here.
 
 ## Development with hot reload
