@@ -20,6 +20,8 @@ import numpy as np
 BOND_TYPES = {1: "SINGLE", 2: "DOUBLE", 3: "TRIPLE", 1.5: "AROMATIC"}
 # Closer than this, two nuclei are certainly a drawing mistake (shortest real bond, H2, is 0.74 Å).
 MIN_SEPARATION_ANGSTROM = 0.3
+# Largest molecule accepted anywhere in the Molecular Builder (matches the API schema).
+MAX_ATOMS = 500
 
 
 @dataclass
@@ -169,6 +171,8 @@ def from_smiles(smiles: str, seed: int = 42) -> tuple[Molecule, dict]:
     if m is None:
         raise ValueError(f"RDKit could not parse SMILES {smiles!r}")
     m = Chem.AddHs(m)
+    if m.GetNumAtoms() > MAX_ATOMS:
+        raise ValueError(f"SMILES gives {m.GetNumAtoms()} atoms including hydrogens (limit {MAX_ATOMS})")
     params = AllChem.ETKDGv3()
     params.randomSeed = seed
     if AllChem.EmbedMolecule(m, params) != 0:

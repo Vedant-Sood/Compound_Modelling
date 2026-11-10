@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import math
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from chemmodel.jobs import tasks
-from chemmodel.jobs.manager import job_dir, manager
+from chemmodel.jobs.manager import TooManyJobs, job_dir, manager
 from chemmodel.quantum.scf import BASIS_SETS, XC_FUNCTIONALS
 
 router = APIRouter(prefix="/api", tags=["calculations"])
@@ -16,16 +17,16 @@ router = APIRouter(prefix="/api", tags=["calculations"])
 
 class SCFRequest(BaseModel):
     atoms: list[tuple[str, tuple[float, float, float]]] = Field(
-        ..., description="[[symbol, [x, y, z]], ...] with coordinates in Å"
+        ..., max_length=500, description="[[symbol, [x, y, z]], ...] with coordinates in Å"
     )
     method: Literal["HF", "DFT"] = "HF"
-    xc: str = "PBE0"
-    basis: str = "def2-svp"
-    charge: int = 0
-    spin: int | None = None
+    xc: str = Field("PBE0", max_length=32)
+    basis: str = Field("def2-svp", max_length=32)
+    charge: int = Field(0, ge=-50, le=200)
+    spin: int | None = Field(None, ge=0, le=100)
     unrestricted: bool | None = None
-    conv_tol: float = 1e-9
-    max_cycle: int = 150
+    conv_tol: float = Field(1e-9, ge=1e-14, le=1e-3)
+    max_cycle: int = Field(150, ge=1, le=1000)
     grid_points: int = Field(64, ge=16, le=128)
 
 
@@ -43,6 +44,16 @@ def calc_options():
     }
 
 
+def submit_job(kind: str, params: dict) -> dict:
+    """Queue a job, mapping manager errors to HTTP errors (422 bad input, 429 busy)."""
+    try:
+        return manager.submit(kind, params).to_dict(include_result=False)
+    except TooManyJobs as exc:
+        raise HTTPException(429, str(exc)) from exc
+    except (KeyError, ValueError) as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
 def preflight_scf(atoms: list, params: dict) -> None:
     """Reject impossible inputs before a job is queued (instead of failing inside it):
     unknown basis/element combinations, zero electrons, impossible spin."""
@@ -55,6 +66,8 @@ def preflight_scf(atoms: list, params: dict) -> None:
         raise HTTPException(422, f"unknown element symbol(s): {', '.join(unknown)}")
     if not atoms:
         raise HTTPException(422, "no atoms given")
+    if not all(math.isfinite(float(x)) for a in atoms for x in a[1]):
+        raise HTTPException(422, "atom coordinates must be finite numbers")
     try:
         mol = Q.build_mol([(a[0], a[1]) for a in atoms], tasks._settings(params))
     except (RuntimeError, ValueError, KeyError) as exc:
@@ -71,11 +84,7 @@ def submit_scf(req: SCFRequest):
     params = req.model_dump()
     params["atoms"] = [[s, list(x)] for s, x in req.atoms]
     preflight_scf(params["atoms"], params)
-    try:
-        job = manager.submit("scf", params)
-    except (KeyError, ValueError) as exc:
-        raise HTTPException(422, str(exc)) from exc
-    return job.to_dict(include_result=False)
+    return submit_job("scf", params)
 
 
 @router.get("/jobs")

@@ -4,19 +4,19 @@ from __future__ import annotations
 
 import numpy as np
 
-from chemmodel.crystal.structures import Structure
+from chemmodel.crystal.structures import MAX_ATOMS, Structure, validate
 
 AVOGADRO = 6.02214076e23
 
 
 def supercell(s: Structure, n: tuple[int, int, int]) -> Structure:
     n1, n2, n3 = (int(x) for x in n)
-    if min(n1, n2, n3) < 1 or n1 * n2 * n3 * len(s.species) > 20000:
+    if min(n1, n2, n3) < 1 or n1 * n2 * n3 * len(s.species) > MAX_ATOMS:
         raise ValueError("supercell repeats must be >= 1 and give at most 20 000 atoms")
     shifts = np.array([(i, j, k) for i in range(n1) for j in range(n2) for k in range(n3)], dtype=float)
     frac = ((s.frac[None, :, :] + shifts[:, None, :]) / np.array([n1, n2, n3])).reshape(-1, 3)
     cell = s.cell * np.array([[n1], [n2], [n3]])
-    return Structure(cell, list(s.species) * len(shifts), frac, s.pbc)
+    return validate(Structure(cell, list(s.species) * len(shifts), frac, s.pbc))
 
 
 def density_g_cm3(s: Structure) -> float:
@@ -102,9 +102,11 @@ def display_geometry(s: Structure, repeats: tuple[int, int, int] = (1, 1, 1), bo
     periodic images on the far side (the textbook picture of a conventional cell; e.g.
     8 corner atoms of an fcc cell). Bonds join first-shell neighbours (see coordination)
     whose both ends are drawn. `site` maps each drawn atom back to the unit-cell site."""
-    n = np.array(repeats, dtype=int)
-    if (n < 1).any() or n.prod() * len(s.species) > 20000:
+    reps = [int(x) for x in repeats]
+    # plain Python ints: a numpy product of huge repeats would silently overflow and pass
+    if len(reps) != 3 or min(reps) < 1 or reps[0] * reps[1] * reps[2] * len(s.species) > MAX_ATOMS:
         raise ValueError("repeats must be >= 1 and give at most 20 000 atoms")
+    n = np.array(reps, dtype=int)
     eps = 1e-6
     frac0 = s.frac % 1.0
     frac0[np.abs(frac0 - 1) < eps] = 0.0
