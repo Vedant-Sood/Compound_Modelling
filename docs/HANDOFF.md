@@ -49,6 +49,7 @@ runtime deps.
 | `crystal/` modules, Crystal workspace (`components/crystal/`, `render/CellOverlay.ts`) | Primary (A), done 2026-10-28 |
 | New `io/` and `databases/` modules | **Second agent (C)** |
 | CI, packaging (`.github/`, `scripts/`) | **Second agent (D)** |
+| Desktop shell (`desktop/`, `backend/chemmodel/launcher.py`, `scripts/build-desktop.*`) | Packaging thread; see DESKTOP.md |
 | `App.tsx`, `api/main.py`, `jobs/tasks.py`, `api/client.ts`, `styles.css`, docs index files | Shared: append-only, see section 4 |
 
 ## 4. Shared integration points (append-only)

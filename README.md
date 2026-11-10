@@ -71,6 +71,12 @@ cd frontend && npm ci && npm run build && cd ..
 After installing and activating the backend environment, development mode with hot reload: run `uvicorn chemmodel.api.main:app --reload` in `backend/`
 and `npm run dev` in `frontend/` (http://localhost:5173, proxies `/api`).
 
+### Desktop app
+
+Chemical Modelling can be packaged as a desktop application (Electron) that starts the backend
+itself: `scripts/build-desktop.sh` (Linux AppImage/.deb) or `.\scripts\build-desktop.ps1`
+(Windows installer, backend in WSL2). See [docs/DESKTOP.md](docs/DESKTOP.md).
+
 ### Windows 11
 
 PySCF does not ship Windows wheels, so the backend runs inside WSL2 Ubuntu. From PowerShell:
@@ -92,6 +98,7 @@ See [docs/VALIDATION.md](docs/VALIDATION.md) for what the tests compare against.
 
 - [Documentation index](docs/README.md) – choose a guide by task
 - [Getting started](docs/GETTING_STARTED.md) – fresh setup, development servers and checks
+- [Desktop app](docs/DESKTOP.md) – building and running the desktop executable
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) – modules, data flow, API
 - [docs/METHODOLOGY.md](docs/METHODOLOGY.md) – scientific methods and conventions
 - [docs/LIMITATIONS.md](docs/LIMITATIONS.md) – known limitations

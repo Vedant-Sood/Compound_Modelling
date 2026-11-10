@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'" />
+    <title>Chemical Modelling</title>
+    <link rel="stylesheet" href="splash.css" />
+  </head>
+  <body>
+    <main>
+      <div class="brand">
+        <img src="../build/icon.png" alt="" width="56" height="56" />
+        <div>
+          <h1>Chemical Modelling</h1>
+          <p class="sub">Computational chemistry workstation</p>
+        </div>
+      </div>
+      <div class="status" id="status-row">
+        <span class="spinner" id="spinner" aria-hidden="true"></span>
+        <span id="status" role="status">Preparing…</span>
+      </div>
+      <pre id="log" aria-label="Backend output"></pre>
+      <div class="error" id="error" hidden>
+        <p id="error-message"></p>
+        <p class="hint">Full log: <code id="log-path"></code></p>
+        <div class="actions">
+          <button id="retry" class="primary">Retry</button>
+          <button id="open-log">Open log</button>
+          <button id="quit">Quit</button>
+        </div>
+      </div>
+    </main>
+    <script src="splash.js"></script>
+  </body>
+</html>

@@ -37,6 +37,10 @@ The pinned requirements include tblite. The package metadata also offers an
 optional xtb extra for the balanced semiempirical mode. Without a working
 tblite engine, that mode is unavailable; the other methods remain separate.
 
+## Desktop app
+
+To build a desktop executable instead of using the browser, see [DESKTOP.md](DESKTOP.md).
+
 ## Windows
 
 Install and configure WSL2 Ubuntu and its Python/venv tools, and install Node/npm
